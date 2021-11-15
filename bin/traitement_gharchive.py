@@ -92,6 +92,8 @@ for element in data:
 
 print("[+] Rule Creation")
 ## Rule creation
+cpCommit = 0
+cpPatch = 0
 for element in ele_list:
     date = datetime.datetime.strptime(element["created_at"], "%Y-%m-%dT%H:%M:%SZ").strftime("%Y-%m-%d")
     time = datetime.datetime.strptime(element["created_at"], "%Y-%m-%dT%H:%M:%SZ").strftime("%H:%M:%S")
@@ -99,73 +101,115 @@ for element in ele_list:
     uuid_parent = str(uuid4())
 
     for i in range(0,len(element["payload"]["commits"])):
-        json_patch = {}
-        flagRepoDelete = False
-        flagCommitDelete = False
-
-        response = requests.get(element["payload"]["commits"][i]["url"])
-        json_api = json.loads(response.text)
-
-        
-        if "message" in json_api:
-            ## The Repository has been deleted
-            if "Not Found" in json_api["message"]:
-                flagRepoDelete = True
-            ## The commit has been deleted
-            if "No commit found" in json_api["message"]:
-                flagCommitDelete = True
-        else:
-            for j in range(0,len(json_api["files"])):
-                if "patch" in json_api["files"][j]:
-                    json_patch["data"] = json_api["files"][j]["patch"]
-                    json_patch["data-sha256"] = str(hashlib.sha256(json_patch["data"].encode()).hexdigest())
-
-                    json_patch["default-encoding"] = "UTF-8"
-
-                    meta_dict = dict()
-                    meta_dict["github:id_event"] = element["id"]
-
-                    meta_dict["github:repo_id"] = str(element["repo"]["id"])
-                    meta_dict["github:repo_name"] = element["repo"]["name"]
-                    meta_dict["github:repo_owner"] = element["actor"]["login"]
-                    meta_dict["github:repo_owner_id"] = str(element["actor"]["id"])
-
-                    meta_dict["github:push_id"] = str(element["payload"]["push_id"])
-                    meta_dict["github:commit_id"] = element["payload"]["commits"][i]["sha"]
-                    meta_dict["github:commit_url"] = element["payload"]["commits"][i]["url"]
-
-                    meta_dict["github:pusher_email"] = element["payload"]["commits"][i]["author"]["email"]
-                    meta_dict["github:pusher"] = element["payload"]["commits"][i]["author"]["name"]
-
-                    if "org" in element:
-                        meta_dict["github:org_id"] = str(element["org"]["id"])
-                        meta_dict["github:org_name"] = element["org"]["login"]
-                    else:
-                        meta_dict["github:org_id"] = ""
-                        meta_dict["github:org_name"] = ""
-
-                    meta_dict["github:datestamp"] = date
-                    meta_dict["github:timestamp"] = time
-                    meta_dict["github:timezone"] = "UTC"
-
-                    meta_dict["github:parent"] = uuid_parent
-
-                    json_patch["meta"] = meta_dict
-
-                    json_patch["source"] = "patch"
-                    json_patch["source-uuid"] = uuid
-
-                    with open(pathPatch, "a") as write_file:
-                        json.dump(json_patch, write_file, indent=4)
-
-                    # print(json_patch)
-                    # print("\n\n")
-
-        json_commit = {}
-
         if args.list:
             for lines in list_leak:
                 if lines.rstrip("\n") in element["payload"]["commits"][i]["message"]:
+                    json_patch = {}
+                    
+                    flagRepoDelete = False
+                    flagCommitDelete = False
+
+                    response = requests.get(element["payload"]["commits"][i]["url"])
+                    json_api = json.loads(response.text)
+
+                    
+                    if "message" in json_api:
+                        ## The Repository has been deleted
+                        if "Not Found" in json_api["message"]:
+                            flagRepoDelete = True
+                        ## The commit has been deleted
+                        if "No commit found" in json_api["message"]:
+                            flagCommitDelete = True
+                    else:
+                        # for j in range(0,len(json_api["files"])):
+                        for j in json_api["files"]:
+                            # if "patch" in json_api["files"][j]:
+                            if "patch" in j:
+                                """json_patch["data"] = json_api["files"][j]["patch"]
+                                json_patch["data-sha256"] = str(hashlib.sha256(json_patch["data"].encode()).hexdigest())
+
+                                json_patch["default-encoding"] = "UTF-8"
+
+                                meta_dict = dict()
+                                meta_dict["github:id_event"] = element["id"]
+
+                                meta_dict["github:repo_id"] = str(element["repo"]["id"])
+                                meta_dict["github:repo_name"] = element["repo"]["name"]
+                                meta_dict["github:repo_owner"] = element["actor"]["login"]
+                                meta_dict["github:repo_owner_id"] = str(element["actor"]["id"])
+
+                                meta_dict["github:push_id"] = str(element["payload"]["push_id"])
+                                meta_dict["github:commit_id"] = element["payload"]["commits"][i]["sha"]
+                                meta_dict["github:commit_url"] = element["payload"]["commits"][i]["url"]
+
+                                meta_dict["github:pusher_email"] = element["payload"]["commits"][i]["author"]["email"]
+                                meta_dict["github:pusher"] = element["payload"]["commits"][i]["author"]["name"]
+
+                                if "org" in element:
+                                    meta_dict["github:org_id"] = str(element["org"]["id"])
+                                    meta_dict["github:org_name"] = element["org"]["login"]
+                                else:
+                                    meta_dict["github:org_id"] = ""
+                                    meta_dict["github:org_name"] = ""
+
+                                meta_dict["github:datestamp"] = date
+                                meta_dict["github:timestamp"] = time
+                                meta_dict["github:timezone"] = "UTC"
+
+                                meta_dict["github:parent"] = uuid_parent
+
+                                json_patch["meta"] = meta_dict
+
+                                json_patch["source"] = "patch"
+                                json_patch["source-uuid"] = uuid"""
+
+                                json_patch["data"] = j["patch"]
+                                json_patch["data-sha256"] = str(hashlib.sha256(json_patch["data"].encode()).hexdigest())
+
+                                json_patch["default-encoding"] = "UTF-8"
+
+                                meta_dict = dict()
+                                meta_dict["github:id_event"] = element["id"]
+
+                                meta_dict["github:repo_id"] = str(element["repo"]["id"])
+                                meta_dict["github:repo_name"] = element["repo"]["name"]
+                                meta_dict["github:repo_owner"] = element["actor"]["login"]
+                                meta_dict["github:repo_owner_id"] = str(element["actor"]["id"])
+
+                                meta_dict["github:push_id"] = str(element["payload"]["push_id"])
+                                meta_dict["github:commit_id"] = element["payload"]["commits"][i]["sha"]
+                                meta_dict["github:commit_url"] = element["payload"]["commits"][i]["url"]
+
+                                meta_dict["github:pusher_email"] = element["payload"]["commits"][i]["author"]["email"]
+                                meta_dict["github:pusher"] = element["payload"]["commits"][i]["author"]["name"]
+
+                                if "org" in element:
+                                    meta_dict["github:org_id"] = str(element["org"]["id"])
+                                    meta_dict["github:org_name"] = element["org"]["login"]
+                                else:
+                                    meta_dict["github:org_id"] = ""
+                                    meta_dict["github:org_name"] = ""
+
+                                meta_dict["github:datestamp"] = date
+                                meta_dict["github:timestamp"] = time
+                                meta_dict["github:timezone"] = "UTC"
+
+                                meta_dict["github:parent"] = uuid_parent
+
+                                json_patch["meta"] = meta_dict
+
+                                json_patch["source"] = "patch"
+                                json_patch["source-uuid"] = uuid
+
+                                with open(pathPatch, "a") as write_file:
+                                    json.dump(json_patch, write_file, indent=4)
+                                cpPatch += 1
+                                # print(json_patch)
+                                # print("\n\n")
+
+                    json_commit = {}
+
+                    
                     json_commit["data"] = element["payload"]["commits"][i]["message"]
                     json_commit["data-sha256"] = str(hashlib.sha256(json_commit["data"].encode()).hexdigest())
                     json_commit["default-encoding"] = "UTF-8"
@@ -210,4 +254,8 @@ for element in ele_list:
 
                     with open(pathCommit, "a") as write_file:
                         json.dump(json_commit, write_file, indent=4)
+
+                    cpCommit += 1
+    print("\r[+] Commit JSON files: %s, Patch JSON files: %s" % (cpCommit, cpPatch), end="")
+    # print("\r[+] Patch JSON files: %s" % (cpCommit), end="")
 
