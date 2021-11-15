@@ -29,8 +29,8 @@ args = parser.parse_args()
 url = "https://data.gharchive.org/%s.json.gz" % (args.datetime)
 filename = url.split("/")[-1]
 pathTemp = os.path.join(pathProg, filename)
-pathPatch = os.path.join(pathProg, "patch.json")
-pathCommit = os.path.join(pathProg, "commit.json")
+pathPatch = os.path.join(pathProg, "patch")
+pathCommit = os.path.join(pathProg, "commit")
 pathError = os.path.join(pathProg, "error.json")
 
 if args.list:
@@ -91,6 +91,12 @@ for element in data:
             ele_list.append(element)
 
 print("[+] Rule Creation")
+
+if not os.path.isdir(pathCommit):
+    os.mkdir(pathCommit)
+if not os.path.isdir(pathPatch):
+    os.mkdir(pathPatch)
+
 ## Rule creation
 cpCommit = 0
 cpPatch = 0
@@ -201,9 +207,12 @@ for element in ele_list:
                                 json_patch["source"] = "patch"
                                 json_patch["source-uuid"] = uuid
 
-                                with open(pathPatch, "a") as write_file:
-                                    json.dump(json_patch, write_file, indent=4)
                                 cpPatch += 1
+                                pathPatchLoc = os.path.join(pathPatch, "patch")
+                                pathPatchLoc = "%s_%s.json" % (pathPatchLoc, cpPatch)
+                                with open(pathPatchLoc, "w") as write_file:
+                                    json.dump(json_patch, write_file, indent=4)
+                                
                                 # print(json_patch)
                                 # print("\n\n")
 
@@ -252,10 +261,15 @@ for element in ele_list:
                     json_commit["source"] = "commit"
                     json_commit["source-uuid"] = uuid
 
-                    with open(pathCommit, "a") as write_file:
+                    cpCommit += 1
+
+                    pathCommitLoc = os.path.join(pathCommit, "commit")
+                    pathCommitLoc = "%s_%s.json" % (pathCommitLoc, cpCommit)
+
+                    with open(pathCommitLoc, "w") as write_file:
                         json.dump(json_commit, write_file, indent=4)
 
-                    cpCommit += 1
+                    
     print("\r[+] Commit JSON files: %s, Patch JSON files: %s" % (cpCommit, cpPatch), end="")
     # print("\r[+] Patch JSON files: %s" % (cpCommit), end="")
 
