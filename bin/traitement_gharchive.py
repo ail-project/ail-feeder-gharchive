@@ -157,6 +157,9 @@ def traitement_json(element, i, cpPatch, cpCommit):
         ## The commit has been deleted
         if "No commit found" in json_api["message"]:
             flagCommitDelete = True
+        if "Bad credentials" in json_api["message"]:
+            print("[-] Bad credentials for API")
+            exit(-1)
         if "API rate limit exceeded" in json_api["message"]:
 
             time_remain = datetime.datetime.fromtimestamp(int(response.headers['X-RateLimit-Reset'])).strftime('%Y-%m-%d %H:%M:%S')
