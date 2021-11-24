@@ -24,7 +24,7 @@ if 'github' in config:
     api_token = config['github']['api_token']
 
 
-def json_patch(element, i, j, cpPatch):
+def json_patch(element, i, j, cpPatch, json_api_repo, json_api):
     json_patch = {}
     json_patch["data"] = j["patch"]
     json_patch["data-sha256"] = str(hashlib.sha256(json_patch["data"].encode()).hexdigest())
@@ -35,23 +35,32 @@ def json_patch(element, i, j, cpPatch):
     meta_dict["github:id_event"] = element["id"]
 
     meta_dict["github:repo_id"] = str(element["repo"]["id"])
+    
     meta_dict["github:repo_name"] = element["repo"]["name"]
-    meta_dict["github:repo_owner"] = element["actor"]["login"]
-    meta_dict["github:repo_owner_id"] = str(element["actor"]["id"])
+
+    if not json_api_repo == None:
+        meta_dict["github:repo_node_id"] = json_api_repo["node_id"]
+        meta_dict["github:repo_owner"] = json_api_repo["owner"]["login"]
+        meta_dict["github:repo_owner_id"] = str(json_api_repo["owner"]["id"])
+        meta_dict["github:repo_owner_node_id"] = json_api_repo["owner"]["node_id"]
 
     meta_dict["github:push_id"] = str(element["payload"]["push_id"])
     meta_dict["github:commit_id"] = element["payload"]["commits"][i]["sha"]
+    meta_dict["github:commit_node_id"] = json_api["node_id"]
     meta_dict["github:commit_url"] = element["payload"]["commits"][i]["url"]
 
     meta_dict["github:pusher_email"] = element["payload"]["commits"][i]["author"]["email"]
     meta_dict["github:pusher"] = element["payload"]["commits"][i]["author"]["name"]
 
+    try:
+        meta_dict["github:pusher_id"] = str(json_api["committer"]["id"])
+        meta_dict["github:pusher_node_id"] = json_api["committer"]["node_id"]
+    except:
+        pass
+
     if "org" in element:
         meta_dict["github:org_id"] = str(element["org"]["id"])
         meta_dict["github:org_name"] = element["org"]["login"]
-    else:
-        meta_dict["github:org_id"] = ""
-        meta_dict["github:org_name"] = ""
 
     meta_dict["github:datestamp"] = date
     meta_dict["github:timestamp"] = time_element
@@ -75,7 +84,7 @@ def json_patch(element, i, j, cpPatch):
     return cpPatch
     
 
-def json_commit(element, i, cpCommit, flagCommitDelete, flagRepoDelete):
+def json_commit(element, i, cpCommit, flagCommitDelete, flagRepoDelete, json_api_repo, json_api):
     json_commit = {}
 
     json_commit["data"] = element["payload"]["commits"][i]["message"]
@@ -88,22 +97,31 @@ def json_commit(element, i, cpCommit, flagCommitDelete, flagRepoDelete):
 
     meta_commit["github:repo_id"] = str(element["repo"]["id"])
     meta_commit["github:repo_name"] = element["repo"]["name"]
-    meta_commit["github:repo_owner"] = element["actor"]["login"]
-    meta_commit["github:repo_owner_id"] = str(element["actor"]["id"])
+
+    if not json_api_repo == None:
+        meta_commit["github:repo_node_id"] = json_api_repo["node_id"]
+        meta_commit["github:repo_owner"] = json_api_repo["owner"]["login"]
+        meta_commit["github:repo_owner_id"] = str(json_api_repo["owner"]["id"])
+        meta_commit["github:repo_owner_node_id"] = json_api_repo["owner"]["node_id"]
 
     meta_commit["github:push_id"] = str(element["payload"]["push_id"])
     meta_commit["github:commit_id"] = element["payload"]["commits"][i]["sha"]
+    if not "message" in json_api:
+        meta_commit["github:commit_node_id"] = json_api["node_id"]
     meta_commit["github:commit_url"] = element["payload"]["commits"][i]["url"]
 
     meta_commit["github:pusher_email"] = element["payload"]["commits"][i]["author"]["email"]
     meta_commit["github:pusher"] = element["payload"]["commits"][i]["author"]["name"]
+    if not "message" in json_api:
+        try:
+            meta_commit["github:pusher_id"] = str(json_api["committer"]["id"])
+            meta_commit["github:pusher_node_id"] = json_api["committer"]["node_id"]
+        except:
+            pass
 
     if "org" in element:
         meta_commit["github:org_id"] = str(element["org"]["id"])
         meta_commit["github:org_name"] = element["org"]["login"]
-    else:
-        meta_commit["github:org_id"] = ""
-        meta_commit["github:org_name"] = ""
 
     meta_commit["github:datestamp"] = date
     meta_commit["github:timestamp"] = time_element
@@ -137,18 +155,8 @@ def subprocessCall(request):
 
     return output
 
-
-def traitement_json(element, i, cpPatch, cpCommit):
-    flagRepoDelete = False
-    flagCommitDelete = False
-
-    flagRecur = False
-
-    header = {'Authorization': 'token ' + api_token}
-    response = requests.get(element["payload"]["commits"][i]["url"], headers=header)
-    # response = requests.get(element["payload"]["commits"][i]["url"])
-
-    json_api = json.loads(response.content)
+def api_traitment(json_api, time_to_wait):
+    flagRepoDelete = flagCommitDelete = flagRecur = False
 
     if "message" in json_api:
         ## The Repository has been deleted
@@ -162,7 +170,7 @@ def traitement_json(element, i, cpPatch, cpCommit):
             exit(-1)
         if "API rate limit exceeded" in json_api["message"]:
 
-            time_remain = datetime.datetime.fromtimestamp(int(response.headers['X-RateLimit-Reset'])).strftime('%Y-%m-%d %H:%M:%S')
+            time_remain = datetime.datetime.fromtimestamp(time_to_wait).strftime('%Y-%m-%d %H:%M:%S')
             time_remain = datetime.datetime.strptime(time_remain, "%Y-%m-%d %H:%M:%S")
             diff = abs(time_remain - datetime.datetime.now())
 
@@ -170,16 +178,59 @@ def traitement_json(element, i, cpPatch, cpCommit):
             time.sleep(diff.total_seconds() + 10)
 
             flagRecur = True
-            cpPatch, cpCommit = traitement_json(element,i,cpPatch,cpCommit)
-    else:
+
+    return flagRepoDelete, flagCommitDelete, flagRecur
+
+
+def traitement_json(element, i, cpPatch, cpCommit):
+    flagRepoDelete = flagCommitDelete = flagRecur = flagCommit = False
+    locRepoDelete = locCommitDelete = locRecur = False
+
+    header = {'Authorization': 'token ' + api_token}
+    response = requests.get(element["payload"]["commits"][i]["url"], headers=header)
+
+    json_api = json.loads(response.content)
+
+    flagRepoDelete, flagCommitDelete, flagRecur = api_traitment(json_api, int(response.headers['X-RateLimit-Reset']))
+
+    while flagRecur:
+        flagCommit = True
+
+        response = requests.get(element["payload"]["commits"][i]["url"], headers=header)
+        json_api = json.loads(response.content)
+
+        flagRepoDelete, flagCommitDelete, flagRecur = api_traitment(json_api, int(response.headers['X-RateLimit-Reset']))
+
+    ## Get repo owner
+    json_api_repo = None
+    if not flagRepoDelete:
+        header = {'Authorization': 'token ' + api_token}
+        response = requests.get(element["repo"]["url"], headers=header)
+
+        json_api_repo = json.loads(response.content)
+
+        locRepoDelete, locCommitDelete, locRecur = api_traitment(json_api_repo, int(response.headers['X-RateLimit-Reset']))
+        while flagRecur:
+            response = requests.get(element["payload"]["commits"][i]["url"], headers=header)
+            json_api = json.loads(response.content)
+
+            locRepoDelete, locCommitDelete, locRecur = api_traitment(json_api_repo, int(response.headers['X-RateLimit-Reset']))
+
+    ## Create Json file
+    if not flagCommitDelete and not flagRepoDelete:
         for j in json_api["files"]:
             if "patch" in j:
-                cpPatch = json_patch(element, i, j, cpPatch)
-    if not flagRecur:
-        cpCommit = json_commit(element, i, cpCommit, flagCommitDelete, flagRepoDelete)
+                cpPatch = json_patch(element, i, j, cpPatch, json_api_repo, json_api)
+    if not flagCommit:
+        cpCommit = json_commit(element, i, cpCommit, flagCommitDelete, flagRepoDelete, json_api_repo, json_api)
 
     return cpPatch, cpCommit
 
+def check_archive_folder(pathArchive, archive):
+    for file in os.listdir(pathArchive):
+        if file == archive:
+            return True
+    return False
 
 
 
@@ -238,8 +289,9 @@ if "{" in args.datetime:
                 else:
                     url = "https://data.gharchive.org/%s%s-%s.json.gz" % (currentDate[0], i, range_list[0][2])
 
-                request = "wget %s -P %s" % (url, pathArchive)
-                subprocessCall(request)
+                if not check_archive_folder(pathArchive, url.split("/")[-1]):
+                    request = "wget %s -P %s" % (url, pathArchive)
+                    subprocessCall(request)
         else:
             print("[-] Date Value Error for Days")
             exit(-1)
@@ -250,8 +302,9 @@ if "{" in args.datetime:
             for i in range(int(range_list[0][0]), int(range_list[0][1]) + 1):
                 url = "https://data.gharchive.org/%s%s.json.gz" % (currentDate[0], i)
 
-                request = "wget %s -P %s" % (url, pathArchive)
-                subprocessCall(request)
+                if not check_archive_folder(pathArchive, url.split("/")[-1]):
+                    request = "wget %s -P %s" % (url, pathArchive)
+                    subprocessCall(request)
         else:
             print("[-] Date Value Error for Hours")
             exit(-1)
@@ -267,16 +320,20 @@ if "{" in args.datetime:
                         url = "https://data.gharchive.org/%s%s-" % (currentDate[0], i)
                     url += "%s.json.gz" % (j)
 
-                    request = "wget %s -P %s" % (url, pathArchive)
-                    subprocessCall(request)
+                    if not check_archive_folder(pathArchive, url.split("/")[-1]):
+                        request = "wget %s -P %s" % (url, pathArchive)
+                        subprocessCall(request)
         else:
             print("[-] Date Value Error for Days or Hours")
+            exit(-1)
 else:
     loc = args.datetime.split("-")
     if (int(loc[1]) > 0 and int(loc[1]) < 13) and (int(loc[2]) > 0 and int(loc[2]) < 32) and (int(loc[3]) >= 0 and int(loc[3]) < 24):
         url = "https://data.gharchive.org/%s.json.gz" % (args.datetime)
-        request = "wget %s -P %s" % (url, pathArchive)
-        subprocessCall(request)
+
+        if not check_archive_folder(pathArchive, url.split("/")[-1]):
+            request = "wget -nv %s -P %s" % (url, pathArchive)
+            subprocessCall(request)
 
 
 for archive in os.listdir(pathArchive):
@@ -309,18 +366,6 @@ for archive in os.listdir(pathArchive):
 
             ## org or user match with entry
             if flag or (not args.org and not args.users):
-                """if args.list:
-                    flagList = False
-                    for i in range(0, len(element["payload"]["commits"])):
-                        for lines in list_leak:
-                            if lines.rstrip("\n") in element["payload"]["commits"][i]["message"]:
-                                ele_list.append(element)
-                                flagList = True
-                                break
-                        if flagList:
-                            break
-                ## There's no list-leak, so element is add without check commit message
-                else:"""
                 ele_list.append(element)
 
     print("[+] Rule Creation")
