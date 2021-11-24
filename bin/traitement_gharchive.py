@@ -188,7 +188,11 @@ def traitement_json(element, i, cpPatch, cpCommit):
     locRepoDelete = locCommitDelete = locRecur = False
 
     header = {'Authorization': 'token ' + api_token}
-    response = requests.get(element["payload"]["commits"][i]["url"], headers=header)
+    try:
+        response = requests.get(element["payload"]["commits"][i]["url"], headers=header)
+    except requests.exceptions.ConnectionError:
+        print("[-] Connection Error to GHArchive")
+        exit(-1)
 
     json_api = json.loads(response.content)
 
@@ -196,8 +200,12 @@ def traitement_json(element, i, cpPatch, cpCommit):
 
     while flagRecur:
         flagCommit = True
-
-        response = requests.get(element["payload"]["commits"][i]["url"], headers=header)
+        
+        try:
+            response = requests.get(element["payload"]["commits"][i]["url"], headers=header)
+        except requests.exceptions.ConnectionError:
+            print("[-] Connection Error to GHArchive")
+            exit(-1)
         json_api = json.loads(response.content)
 
         flagRepoDelete, flagCommitDelete, flagRecur = api_traitment(json_api, int(response.headers['X-RateLimit-Reset']))
@@ -206,13 +214,21 @@ def traitement_json(element, i, cpPatch, cpCommit):
     json_api_repo = None
     if not flagRepoDelete:
         header = {'Authorization': 'token ' + api_token}
-        response = requests.get(element["repo"]["url"], headers=header)
-
-        json_api_repo = json.loads(response.content)
+        
+        try:
+            response = requests.get(element["repo"]["url"], headers=header)
+        except requests.exceptions.ConnectionError:
+            print("[-] Connection Error to GHArchive")
+            exit(-1)
+            json_api_repo = json.loads(response.content)
 
         locRepoDelete, locCommitDelete, locRecur = api_traitment(json_api_repo, int(response.headers['X-RateLimit-Reset']))
         while flagRecur:
-            response = requests.get(element["payload"]["commits"][i]["url"], headers=header)
+            try:
+                response = requests.get(element["payload"]["commits"][i]["url"], headers=header)
+            except requests.exceptions.ConnectionError:
+                print("[-] Connection Error to GHArchive")
+                exit(-1)
             json_api = json.loads(response.content)
 
             locRepoDelete, locCommitDelete, locRecur = api_traitment(json_api_repo, int(response.headers['X-RateLimit-Reset']))
@@ -244,17 +260,21 @@ def check_archive_folder(pathArchive, archive):
 parser = argparse.ArgumentParser()
 parser.add_argument("datetime", help="date of the GHArchive, YYYY-MM-DD-H, YYYY-MM-DD-{H..H}, YYYY-MM-{DD..DD}-{H..H}, YYYY-MM-{DD..DD}-H")
 parser.add_argument("--nocache", help="disable cache", action="store_true")
-parser.add_argument("-u", "--users", help="search username")
-parser.add_argument("-o", "--org", help="search organisation")
-parser.add_argument("-l", "--list", help="list of word to search. If no list is give, all commit message will be add")
-args = parser.parse_args()
 
+parser.add_argument("-u", "--users", nargs="+", help="search username")
+parser.add_argument("-fu", "--fileusers", help="file containing list of username")
+
+parser.add_argument("-o", "--org", nargs="+", help="search organisation")
+parser.add_argument("-fo", "--fileorg", help="file containing list of organisations")
+
+parser.add_argument("-l", "--list", nargs="+", help="list of word to search. If no list is give, all commit message will be add")
+parser.add_argument("-fl", "--filelist", help="file containing list of word for commit message")
+args = parser.parse_args()
 
 x = re.match(r"[0-9]{4}\-[0-9]{2}\-\{?[0-9]{1,2}\.{0,2}[0-9]{0,2}\}?\-\{?[0-9]{1,2}\.{0,2}[0-9]{0,2}\}?", args.datetime)
 if x == None:
     print("[-] Date Format Error")
     exit(-1)
-
 
 pathArchive = os.path.join(pathProg, "archive")
 pathCurrentArchive = os.path.join(pathArchive, "current")
@@ -267,14 +287,14 @@ if not os.path.isdir(pathArchive):
 if not os.path.isdir(pathCurrentArchive):
     os.mkdir(pathCurrentArchive)
 
-if args.list:
-    with open(args.list, "r") as read_file:
+if args.filelist:
+    with open(args.filelist, "r") as read_file:
         list_leak = read_file.readlines()
-if args.org:
-    with open(args.org, "r") as read_file:
+if args.fileorg:
+    with open(args.fileorg, "r") as read_file:
         list_org = read_file.readlines()
-if args.users:
-    with open(args.users, "r") as read_file:
+if args.fileusers:
+    with open(args.fileusers, "r") as read_file:
         list_users = read_file.readlines()
 
 ## Download archive file
