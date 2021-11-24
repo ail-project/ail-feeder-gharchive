@@ -3,6 +3,7 @@ import re
 import json
 import gzip
 import time
+import shutil
 import hashlib
 import pathlib
 import argparse
@@ -229,6 +230,9 @@ def traitement_json(element, i, cpPatch, cpCommit):
 def check_archive_folder(pathArchive, archive):
     for file in os.listdir(pathArchive):
         if file == archive:
+            pathSrc = os.path.join(pathArchive, file)
+            pathDst = os.path.join(pathCurrentArchive, file)
+            os.rename(pathSrc, pathDst)
             return True
     return False
 
@@ -253,12 +257,15 @@ if x == None:
 
 
 pathArchive = os.path.join(pathProg, "archive")
+pathCurrentArchive = os.path.join(pathArchive, "current")
 pathPatch = os.path.join(pathProg, "patch")
 pathCommit = os.path.join(pathProg, "commit")
 pathError = os.path.join(pathProg, "error.json")
 
 if not os.path.isdir(pathArchive):
     os.mkdir(pathArchive)
+if not os.path.isdir(pathCurrentArchive):
+    os.mkdir(pathCurrentArchive)
 
 if args.list:
     with open(args.list, "r") as read_file:
@@ -290,7 +297,7 @@ if "{" in args.datetime:
                     url = "https://data.gharchive.org/%s%s-%s.json.gz" % (currentDate[0], i, range_list[0][2])
 
                 if not check_archive_folder(pathArchive, url.split("/")[-1]):
-                    request = "wget %s -P %s" % (url, pathArchive)
+                    request = "wget %s -P %s" % (url, pathCurrentArchive)
                     subprocessCall(request)
         else:
             print("[-] Date Value Error for Days")
@@ -303,7 +310,7 @@ if "{" in args.datetime:
                 url = "https://data.gharchive.org/%s%s.json.gz" % (currentDate[0], i)
 
                 if not check_archive_folder(pathArchive, url.split("/")[-1]):
-                    request = "wget %s -P %s" % (url, pathArchive)
+                    request = "wget %s -P %s" % (url, pathCurrentArchive)
                     subprocessCall(request)
         else:
             print("[-] Date Value Error for Hours")
@@ -321,7 +328,7 @@ if "{" in args.datetime:
                     url += "%s.json.gz" % (j)
 
                     if not check_archive_folder(pathArchive, url.split("/")[-1]):
-                        request = "wget %s -P %s" % (url, pathArchive)
+                        request = "wget %s -P %s" % (url, pathCurrentArchive)
                         subprocessCall(request)
         else:
             print("[-] Date Value Error for Days or Hours")
@@ -332,12 +339,12 @@ else:
         url = "https://data.gharchive.org/%s.json.gz" % (args.datetime)
 
         if not check_archive_folder(pathArchive, url.split("/")[-1]):
-            request = "wget -nv %s -P %s" % (url, pathArchive)
+            request = "wget -nv %s -P %s" % (url, pathCurrentArchive)
             subprocessCall(request)
 
 
-for archive in os.listdir(pathArchive):
-    currentArchive = os.path.join(pathArchive, archive)
+for archive in os.listdir(pathCurrentArchive):
+    currentArchive = os.path.join(pathCurrentArchive, archive)
 
     ## Open json file
     print("[+] Unizp...")
@@ -394,3 +401,11 @@ for archive in os.listdir(pathArchive):
                
         print("\r[+] Commit JSON files: %s, Patch JSON files: %s" % (cpCommit, cpPatch), end="")
         
+if args.nocache:
+    shutil.rmtree(pathArchive)
+else:
+    for archive in os.listdir(pathCurrentArchive):
+        fileSrc = os.path.join(pathCurrentArchive, archive)
+        fileDst = os.path.join(pathArchive, archive)
+
+        os.rename(fileSrc, fileDst)
