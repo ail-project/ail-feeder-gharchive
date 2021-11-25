@@ -207,7 +207,7 @@ def json_process(element, i, cpPatch, cpCommit):
     ## Get repo owner
     json_api_repo = None
     if not flagRepoDelete:
-        header = {'Authorization': f'token api_token'}
+        header = {'Authorization': f'token {api_token}'}
         
         try:
             response = requests.get(element["repo"]["url"], headers=header)
@@ -239,7 +239,10 @@ def json_process(element, i, cpPatch, cpCommit):
 
 
 ## Check if archive already exist
-def check_archive_folder(pathArchive, archive):
+def check_archive_folder(pathArchive, pathCurrentArchive, archive):
+    for file in os.listdir(pathCurrentArchive):
+        if file == archive:
+            return True
     for file in os.listdir(pathArchive):
         if file == archive:
             pathSrc = os.path.join(pathArchive, file)
@@ -330,7 +333,7 @@ if "{" in args.datetime:
                 else:
                     url = f"https://data.gharchive.org/{currentDate[0]}{i}-{range_list[0][2]}.json.gz"
 
-                if not check_archive_folder(pathArchive, url.split("/")[-1]):
+                if not check_archive_folder(pathArchive, pathCurrentArchive, url.split("/")[-1]):
                     request = ["wget", url, "-P", pathCurrentArchive]
                     subprocessCall(request)
         else:
@@ -343,7 +346,7 @@ if "{" in args.datetime:
             for i in range(int(range_list[0][0]), int(range_list[0][1]) + 1):
                 url = f"https://data.gharchive.org/{currentDate[0]}{i}.json.gz"
 
-                if not check_archive_folder(pathArchive, url.split("/")[-1]):
+                if not check_archive_folder(pathArchive, pathCurrentArchive, url.split("/")[-1]):
                     request = ["wget", url, "-P", pathCurrentArchive]
                     subprocessCall(request)
         else:
@@ -361,7 +364,7 @@ if "{" in args.datetime:
                         url = f"https://data.gharchive.org/{currentDate[0]}{i}-"
                     url += f"{j}.json.gz"
 
-                    if not check_archive_folder(pathArchive, url.split("/")[-1]):
+                    if not check_archive_folder(pathArchive, pathCurrentArchive, url.split("/")[-1]):
                         request = ["wget", url, "-P", pathCurrentArchive]
                         subprocessCall(request)
         else:
@@ -372,7 +375,7 @@ else:
     if (int(loc[1]) > 0 and int(loc[1]) < 13) and (int(loc[2]) > 0 and int(loc[2]) < 32) and (int(loc[3]) >= 0 and int(loc[3]) < 24):
         url = f"https://data.gharchive.org/{args.datetime}.json.gz"
 
-        if not check_archive_folder(pathArchive, url.split("/")[-1]):
+        if not check_archive_folder(pathArchive, pathCurrentArchive, url.split("/")[-1]):
             request = ["wget", url, "-P", pathCurrentArchive]
             subprocessCall(request)
 
