@@ -1,10 +1,10 @@
 import os
 import re
+import sys
 import json
 import gzip
 import time
 import shutil
-import hashlib
 import pathlib
 import argparse
 import datetime
@@ -12,9 +12,11 @@ import requests
 import subprocess
 import configparser
 from uuid import uuid4
+from pyail import PyAIL
 
 pathProg = pathlib.Path(__file__).parent.absolute()
 
+## Config
 config = configparser.ConfigParser()
 config.read('../etc/config.cfg')
 
@@ -24,13 +26,32 @@ if 'general' in config:
 if 'github' in config:
     api_token = config['github']['api_token']
 
+if 'ail' in config:
+    ail_url = config['ail']['url']
+    ail_key = config['ail']['apikey']
 
+if 'archive' in config:
+    if config['archive']['pathArchive']:
+        pathArchive = config['archive']['pathArchive']
+    else:
+        pathArchive = os.path.join(pathProg, "archive")
+
+pathCurrentArchive = os.path.join(pathArchive, "current")
+
+## Ail
+try:
+    pyail = PyAIL(ail_url, ail_key, ssl=False)
+except Exception as e:
+    print(e)
+    sys.exit(0)
+
+
+## Function
 def json_patch(element, i, j, cpPatch, json_api_repo, json_api):
-    json_patch = {}
-    json_patch["data"] = j["patch"]
-    json_patch["data-sha256"] = str(hashlib.sha256(json_patch["data"].encode()).hexdigest())
 
-    json_patch["default-encoding"] = "UTF-8"
+    data = j["patch"]
+
+    default_encoding = "UTF-8"
 
     meta_dict = dict()
     meta_dict["github:id_event"] = element["id"]
@@ -69,28 +90,20 @@ def json_patch(element, i, j, cpPatch, json_api_repo, json_api):
 
     meta_dict["github:parent"] = uuid_parent
 
-    json_patch["meta"] = meta_dict
-
-    json_patch["source"] = "patch"
-    json_patch["source-uuid"] = uuid
+    source = "patch"
+    source_uuid = uuid
 
     cpPatch += 1
-
-    pathPatchLoc = os.path.join(pathPatch, "patch")
-    pathPatchLoc = "%s_%s.json" % (pathPatchLoc, cpPatch)
-
-    with open(pathPatchLoc, "w") as write_file:
-        json.dump(json_patch, write_file, indent=4)
+    
+    pyail.feed_json_item(data, meta_dict, source, source_uuid, default_encoding)
     
     return cpPatch
     
 
 def json_commit(element, i, cpCommit, flagCommitDelete, flagRepoDelete, json_api_repo, json_api):
-    json_commit = {}
 
-    json_commit["data"] = element["payload"]["commits"][i]["message"]
-    json_commit["data-sha256"] = str(hashlib.sha256(json_commit["data"].encode()).hexdigest())
-    json_commit["default-encoding"] = "UTF-8"
+    data = element["payload"]["commits"][i]["message"]
+    default_encoding = "UTF-8"
 
     meta_commit = dict()
     meta_commit["id"] = uuid_parent
@@ -133,28 +146,23 @@ def json_commit(element, i, cpCommit, flagCommitDelete, flagRepoDelete, json_api
     if flagCommitDelete:
         meta_commit["github:delete_commit"] = True
     
-
-    json_commit["meta"] = meta_commit
-
-    json_commit["source"] = "commit"
-    json_commit["source-uuid"] = uuid
+    source = "commit"
+    source_uuid = uuid
 
     cpCommit += 1
 
-    pathCommitLoc = os.path.join(pathCommit, "commit")
-    pathCommitLoc = "%s_%s.json" % (pathCommitLoc, cpCommit)
-
-    with open(pathCommitLoc, "w") as write_file:
-        json.dump(json_commit, write_file, indent=4)
+    pyail.feed_json_item(data, meta_commit, source, source_uuid, default_encoding)
     
     return cpCommit
 
+
 def subprocessCall(request):
-    p = subprocess.Popen(request, stdout=subprocess.PIPE, shell=True)
+    p = subprocess.Popen(request, stdout=subprocess.PIPE)
     (output, err) = p.communicate()
     p_status = p.wait()
 
     return output
+
 
 def api_traitment(json_api, time_to_wait):
     flagRepoDelete = flagCommitDelete = flagRecur = False
@@ -183,17 +191,17 @@ def api_traitment(json_api, time_to_wait):
     return flagRepoDelete, flagCommitDelete, flagRecur
 
 
-def traitement_json(element, i, cpPatch, cpCommit):
+def json_process(element, i, cpPatch, cpCommit):
     flagRepoDelete = flagCommitDelete = flagRecur = flagCommit = False
     locRepoDelete = locCommitDelete = locRecur = False
 
     header = {'Authorization': 'token ' + api_token}
+
     try:
         response = requests.get(element["payload"]["commits"][i]["url"], headers=header)
     except requests.exceptions.ConnectionError:
         print("[-] Connection Error to GHArchive")
         exit(-1)
-
     json_api = json.loads(response.content)
 
     flagRepoDelete, flagCommitDelete, flagRecur = api_traitment(json_api, int(response.headers['X-RateLimit-Reset']))
@@ -220,7 +228,7 @@ def traitement_json(element, i, cpPatch, cpCommit):
         except requests.exceptions.ConnectionError:
             print("[-] Connection Error to GHArchive")
             exit(-1)
-            json_api_repo = json.loads(response.content)
+        json_api_repo = json.loads(response.content)
 
         locRepoDelete, locCommitDelete, locRecur = api_traitment(json_api_repo, int(response.headers['X-RateLimit-Reset']))
         while flagRecur:
@@ -243,6 +251,8 @@ def traitement_json(element, i, cpPatch, cpCommit):
 
     return cpPatch, cpCommit
 
+
+## Check if archive already exist
 def check_archive_folder(pathArchive, archive):
     for file in os.listdir(pathArchive):
         if file == archive:
@@ -255,8 +265,7 @@ def check_archive_folder(pathArchive, archive):
 
 
 
-# arguments parsing
-
+## Arguments parsing
 parser = argparse.ArgumentParser()
 parser.add_argument("datetime", help="date of the GHArchive, YYYY-MM-DD-H, YYYY-MM-DD-{H..H}, YYYY-MM-{DD..DD}-{H..H}, YYYY-MM-{DD..DD}-H")
 parser.add_argument("--nocache", help="disable cache", action="store_true")
@@ -271,16 +280,12 @@ parser.add_argument("-l", "--list", nargs="+", help="list of word to search. If 
 parser.add_argument("-fl", "--filelist", help="file containing list of word for commit message")
 args = parser.parse_args()
 
+## Check for datetime parameter
 x = re.match(r"[0-9]{4}\-[0-9]{2}\-\{?[0-9]{1,2}\.{0,2}[0-9]{0,2}\}?\-\{?[0-9]{1,2}\.{0,2}[0-9]{0,2}\}?", args.datetime)
 if x == None:
     print("[-] Date Format Error")
     exit(-1)
 
-pathArchive = os.path.join(pathProg, "archive")
-pathCurrentArchive = os.path.join(pathArchive, "current")
-pathPatch = os.path.join(pathProg, "patch")
-pathCommit = os.path.join(pathProg, "commit")
-pathError = os.path.join(pathProg, "error.json")
 
 if not os.path.isdir(pathArchive):
     os.mkdir(pathArchive)
@@ -296,6 +301,7 @@ if args.fileorg:
 if args.fileusers:
     with open(args.fileusers, "r") as read_file:
         list_users = read_file.readlines()
+
 
 ## Download archive file
 print("[+] Downloading...")
@@ -317,7 +323,7 @@ if "{" in args.datetime:
                     url = "https://data.gharchive.org/%s%s-%s.json.gz" % (currentDate[0], i, range_list[0][2])
 
                 if not check_archive_folder(pathArchive, url.split("/")[-1]):
-                    request = "wget %s -P %s" % (url, pathCurrentArchive)
+                    request = ["wget", url, "-P", pathCurrentArchive]
                     subprocessCall(request)
         else:
             print("[-] Date Value Error for Days")
@@ -330,7 +336,7 @@ if "{" in args.datetime:
                 url = "https://data.gharchive.org/%s%s.json.gz" % (currentDate[0], i)
 
                 if not check_archive_folder(pathArchive, url.split("/")[-1]):
-                    request = "wget %s -P %s" % (url, pathCurrentArchive)
+                    request = ["wget", url, "-P", pathCurrentArchive]
                     subprocessCall(request)
         else:
             print("[-] Date Value Error for Hours")
@@ -348,7 +354,7 @@ if "{" in args.datetime:
                     url += "%s.json.gz" % (j)
 
                     if not check_archive_folder(pathArchive, url.split("/")[-1]):
-                        request = "wget %s -P %s" % (url, pathCurrentArchive)
+                        request = ["wget", url, "-P", pathCurrentArchive]
                         subprocessCall(request)
         else:
             print("[-] Date Value Error for Days or Hours")
@@ -359,7 +365,7 @@ else:
         url = "https://data.gharchive.org/%s.json.gz" % (args.datetime)
 
         if not check_archive_folder(pathArchive, url.split("/")[-1]):
-            request = "wget -nv %s -P %s" % (url, pathCurrentArchive)
+            request = ["wget", url, "-P", pathCurrentArchive]
             subprocessCall(request)
 
 
@@ -395,13 +401,8 @@ for archive in os.listdir(pathCurrentArchive):
             if flag or (not args.org and not args.users):
                 ele_list.append(element)
 
+
     print("[+] Rule Creation")
-
-    if not os.path.isdir(pathCommit):
-        os.mkdir(pathCommit)
-    if not os.path.isdir(pathPatch):
-        os.mkdir(pathPatch)
-
     ## Rule creation
     cpCommit = 0
     cpPatch = 0
@@ -415,9 +416,9 @@ for archive in os.listdir(pathCurrentArchive):
             if args.list:
                 for lines in list_leak:
                     if lines.rstrip("\n") in element["payload"]["commits"][i]["message"]:
-                        cpPatch, cpCommit = traitement_json(element, i, cpPatch, cpCommit)
+                        cpPatch, cpCommit = json_process(element, i, cpPatch, cpCommit)
             else:
-                cpPatch, cpCommit = traitement_json(element, i, cpPatch, cpCommit)
+                cpPatch, cpCommit = json_process(element, i, cpPatch, cpCommit)
                
         print("\r[+] Commit JSON files: %s, Patch JSON files: %s" % (cpCommit, cpPatch), end="")
         
