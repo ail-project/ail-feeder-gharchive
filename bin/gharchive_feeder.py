@@ -42,7 +42,8 @@ pathCurrentArchive = os.path.join(pathArchive, "current")
 try:
     pyail = PyAIL(ail_url, ail_key, ssl=False)
 except Exception as e:
-    print(e)
+    # print(e)
+    print("\n\n[-] Error during creation of AIL instance")
     sys.exit(0)
 
 
@@ -183,7 +184,7 @@ def api_traitment(json_api, time_to_wait):
             time_remain = datetime.datetime.strptime(time_remain, "%Y-%m-%d %H:%M:%S")
             diff = abs(time_remain - datetime.datetime.now())
 
-            print("\n\n[-] API rate limit exceeded, sleep for %s" % (diff))
+            print(f"\n\n[-] API rate limit exceeded, sleep for {diff}")
             time.sleep(diff.total_seconds() + 10)
 
             flagRecur = True
@@ -195,7 +196,7 @@ def json_process(element, i, cpPatch, cpCommit):
     flagRepoDelete = flagCommitDelete = flagRecur = flagCommit = False
     locRepoDelete = locCommitDelete = locRecur = False
 
-    header = {'Authorization': 'token ' + api_token}
+    header = {'Authorization': f'token {api_token}'}
 
     try:
         response = requests.get(element["payload"]["commits"][i]["url"], headers=header)
@@ -221,7 +222,7 @@ def json_process(element, i, cpPatch, cpCommit):
     ## Get repo owner
     json_api_repo = None
     if not flagRepoDelete:
-        header = {'Authorization': 'token ' + api_token}
+        header = {'Authorization': f'token api_token'}
         
         try:
             response = requests.get(element["repo"]["url"], headers=header)
@@ -318,9 +319,9 @@ if "{" in args.datetime:
         if int(range_list[0][0]) > 0 and int(range_list[0][1]) < 32:
             for i in range(int(range_list[0][0]), int(range_list[0][1]) + 1):
                 if i < 10:
-                    url = "https://data.gharchive.org/%s0%s-%s.json.gz" % (currentDate[0], i, range_list[0][2])
+                    url = f"https://data.gharchive.org/{currentDate[0]}0{i}-{range_list[0][2]}.json.gz"
                 else:
-                    url = "https://data.gharchive.org/%s%s-%s.json.gz" % (currentDate[0], i, range_list[0][2])
+                    url = f"https://data.gharchive.org/{currentDate[0]}{i}-{range_list[0][2]}.json.gz"
 
                 if not check_archive_folder(pathArchive, url.split("/")[-1]):
                     request = ["wget", url, "-P", pathCurrentArchive]
@@ -333,7 +334,7 @@ if "{" in args.datetime:
     if len(range_list) == 1:
         if int(range_list[0][0]) >= 0 and int(range_list[0][1]) < 24:
             for i in range(int(range_list[0][0]), int(range_list[0][1]) + 1):
-                url = "https://data.gharchive.org/%s%s.json.gz" % (currentDate[0], i)
+                url = f"https://data.gharchive.org/{currentDate[0]}{i}.json.gz"
 
                 if not check_archive_folder(pathArchive, url.split("/")[-1]):
                     request = ["wget", url, "-P", pathCurrentArchive]
@@ -348,10 +349,10 @@ if "{" in args.datetime:
             for i in range(int(range_list[0][0]), int(range_list[0][1]) + 1):
                 for j in range(int(range_list[0][0]), int(range_list[0][1]) + 1):
                     if i < 10:
-                        url = "https://data.gharchive.org/%s0%s-" % (currentDate[0], i)
+                        url = f"https://data.gharchive.org/{currentDate[0]}0{i}-"
                     else:
-                        url = "https://data.gharchive.org/%s%s-" % (currentDate[0], i)
-                    url += "%s.json.gz" % (j)
+                        url = f"https://data.gharchive.org/{currentDate[0]}{i}-"
+                    url += f"{j}.json.gz"
 
                     if not check_archive_folder(pathArchive, url.split("/")[-1]):
                         request = ["wget", url, "-P", pathCurrentArchive]
@@ -362,7 +363,7 @@ if "{" in args.datetime:
 else:
     loc = args.datetime.split("-")
     if (int(loc[1]) > 0 and int(loc[1]) < 13) and (int(loc[2]) > 0 and int(loc[2]) < 32) and (int(loc[3]) >= 0 and int(loc[3]) < 24):
-        url = "https://data.gharchive.org/%s.json.gz" % (args.datetime)
+        url = f"https://data.gharchive.org/{args.datetime}.json.gz"
 
         if not check_archive_folder(pathArchive, url.split("/")[-1]):
             request = ["wget", url, "-P", pathCurrentArchive]
@@ -420,7 +421,7 @@ for archive in os.listdir(pathCurrentArchive):
             else:
                 cpPatch, cpCommit = json_process(element, i, cpPatch, cpCommit)
                
-        print("\r[+] Commit JSON files: %s, Patch JSON files: %s" % (cpCommit, cpPatch), end="")
+        print(f"\r[+] Commit JSON files: {cpCommit}, Patch JSON files: {cpPatch}", end="")
         
 if args.nocache:
     shutil.rmtree(pathArchive)
