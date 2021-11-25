@@ -293,6 +293,13 @@ if not os.path.isdir(pathArchive):
 if not os.path.isdir(pathCurrentArchive):
     os.mkdir(pathCurrentArchive)
 
+if args.users:
+    list_users = args.users
+if args.org:
+    list_org = args.org
+if args.list:
+    list_leak = args.list
+
 if args.filelist:
     with open(args.filelist, "r") as read_file:
         list_leak = read_file.readlines()
@@ -383,13 +390,13 @@ for archive in os.listdir(pathCurrentArchive):
     for element in data:
         if element["type"] == "PushEvent":
             flag = False
-            if args.org:
+            if args.org or args.fileorg:
                 if "org" in element:
                     for orgs in list_org:
                         if orgs.rstrip("\n") == element["org"]["login"]:
                             flag = True
                             break
-            if args.users:
+            if args.users or args.fileusers:
                 for i in range(0, len(element["payload"]["commits"])):
                     for users in list_users:
                         if users.rstrip("\n") == element["payload"]["commits"][i]["author"]["name"]:
@@ -399,7 +406,7 @@ for archive in os.listdir(pathCurrentArchive):
                         break
 
             ## org or user match with entry
-            if flag or (not args.org and not args.users):
+            if flag or (not args.org and not args.users and not args.fileorg and not args.fileusers):
                 ele_list.append(element)
 
 
@@ -414,7 +421,7 @@ for archive in os.listdir(pathCurrentArchive):
         uuid_parent = str(uuid4())
 
         for i in range(0,len(element["payload"]["commits"])):
-            if args.list:
+            if args.filelist or args.list:
                 for lines in list_leak:
                     if lines.rstrip("\n") in element["payload"]["commits"][i]["message"]:
                         cpPatch, cpCommit = json_process(element, i, cpPatch, cpCommit)
