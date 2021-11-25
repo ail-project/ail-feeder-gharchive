@@ -150,7 +150,7 @@ def subprocessCall(request):
     return output
 
 
-def api_traitment(json_api, time_to_wait):
+def api_process(json_api, time_to_wait):
     flagRepoDelete = flagCommitDelete = flagRecur = False
 
     if "message" in json_api:
@@ -190,7 +190,7 @@ def json_process(element, i, cpPatch, cpCommit):
         exit(-1)
     json_api = json.loads(response.content)
 
-    flagRepoDelete, flagCommitDelete, flagRecur = api_traitment(json_api, int(response.headers['X-RateLimit-Reset']))
+    flagRepoDelete, flagCommitDelete, flagRecur = api_process(json_api, int(response.headers['X-RateLimit-Reset']))
 
     while flagRecur:
         flagCommit = True
@@ -202,7 +202,7 @@ def json_process(element, i, cpPatch, cpCommit):
             exit(-1)
         json_api = json.loads(response.content)
 
-        flagRepoDelete, flagCommitDelete, flagRecur = api_traitment(json_api, int(response.headers['X-RateLimit-Reset']))
+        flagRepoDelete, flagCommitDelete, flagRecur = api_process(json_api, int(response.headers['X-RateLimit-Reset']))
 
     ## Get repo owner
     json_api_repo = None
@@ -216,7 +216,7 @@ def json_process(element, i, cpPatch, cpCommit):
             exit(-1)
         json_api_repo = json.loads(response.content)
 
-        locRepoDelete, locCommitDelete, locRecur = api_traitment(json_api_repo, int(response.headers['X-RateLimit-Reset']))
+        locRepoDelete, locCommitDelete, locRecur = api_process(json_api_repo, int(response.headers['X-RateLimit-Reset']))
         while flagRecur:
             try:
                 response = requests.get(element["payload"]["commits"][i]["url"], headers=header)
@@ -225,7 +225,7 @@ def json_process(element, i, cpPatch, cpCommit):
                 exit(-1)
             json_api = json.loads(response.content)
 
-            locRepoDelete, locCommitDelete, locRecur = api_traitment(json_api_repo, int(response.headers['X-RateLimit-Reset']))
+            locRepoDelete, locCommitDelete, locRecur = api_process(json_api_repo, int(response.headers['X-RateLimit-Reset']))
 
     ## Create Json file
     if not flagCommitDelete and not flagRepoDelete:
@@ -254,7 +254,7 @@ def check_archive_folder(pathArchive, archive):
 ## Arguments parsing
 parser = argparse.ArgumentParser()
 parser.add_argument("datetime", help="date of the GHArchive, YYYY-MM-DD-H, YYYY-MM-DD-{H..H}, YYYY-MM-{DD..DD}-{H..H}, YYYY-MM-{DD..DD}-H")
-parser.add_argument("--nocache", help="disable cache", action="store_true")
+parser.add_argument("--nocache", help="disable store of archive", action="store_true")
 
 parser.add_argument("-u", "--users", nargs="+", help="search username")
 parser.add_argument("-fu", "--fileusers", help="file containing list of username")
