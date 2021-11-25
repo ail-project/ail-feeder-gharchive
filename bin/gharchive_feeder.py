@@ -30,21 +30,6 @@ if 'ail' in config:
     ail_url = config['ail']['url']
     ail_key = config['ail']['apikey']
 
-if 'archive' in config:
-    if config['archive']['pathArchive']:
-        pathArchive = config['archive']['pathArchive']
-    else:
-        pathArchive = os.path.join(pathProg, "archive")
-
-pathCurrentArchive = os.path.join(pathArchive, "current")
-
-## Ail
-try:
-    pyail = PyAIL(ail_url, ail_key, ssl=False)
-except Exception as e:
-    # print(e)
-    print("\n\n[-] Error during creation of AIL instance")
-    sys.exit(0)
 
 
 ## Function
@@ -286,6 +271,21 @@ x = re.match(r"[0-9]{4}\-[0-9]{2}\-\{?[0-9]{1,2}\.{0,2}[0-9]{0,2}\}?\-\{?[0-9]{1
 if x == None:
     print("[-] Date Format Error")
     exit(-1)
+
+pathArchive = os.path.join(pathProg, "archive")
+if 'archive' in config:
+    if config['archive']['pathArchive']:
+        pathArchive = config['archive']['pathArchive']
+
+pathCurrentArchive = os.path.join(pathArchive, "current")
+
+## Ail
+try:
+    pyail = PyAIL(ail_url, ail_key, ssl=False)
+except Exception as e:
+    # print(e)
+    print("\n\n[-] Error during creation of AIL instance")
+    sys.exit(0)
 
 
 if not os.path.isdir(pathArchive):
