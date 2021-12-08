@@ -19,7 +19,7 @@ pathProg = pathlib.Path(__file__).parent.absolute()
 
 ## Config
 config = configparser.ConfigParser()
-config.read('../etc/config.cfg')
+config.read('../etc/ail-feeder-gharchive.cfg')
 
 if 'general' in config:
     uuid = config['general']['uuid']
@@ -33,6 +33,10 @@ if 'ail' in config:
     ail_url = config['ail']['url']
     ail_key = config['ail']['apikey']
 
+if 'redis' in config:
+    r = redis.Redis(host=config['redis']['host'], port=config['redis']['port'], db=config['redis']['db'])
+else:
+    r = redis.Redis(host='localhost', port=6379, db=0)
 
 
 ## Function
@@ -79,12 +83,23 @@ def json_patch(element, i, j, cpPatch, json_api_repo, json_api):
 
     meta_dict["github:parent"] = uuid_parent
 
-    source = "patch"
+    source = "gharchive:patch"
     source_uuid = uuid
 
     cpPatch += 1
     
-    pyail.feed_json_item(data, meta_dict, source, source_uuid, default_encoding)
+    if not debug:
+        pyail.feed_json_item(data, meta_dict, source, source_uuid, default_encoding)
+    else:
+        json_patch = {}
+        json_patch["data"] = data
+        json_patch["default-encoding"] = default_encoding
+        json_patch["meta"] = meta_dict
+        json_patch["source"] = source
+        json_patch["source_uuid"] = source_uuid
+
+        with open(os.path.join(pathProg, "debug.json"), "a") as write_debug:
+            json.dump(json_patch, write_debug, indent=4)
     
     return cpPatch
     
@@ -135,12 +150,24 @@ def json_commit(element, i, cpCommit, flagCommitDelete, flagRepoDelete, json_api
     if flagCommitDelete:
         meta_commit["github:delete_commit"] = True
     
-    source = "commit"
+    source = "gharchive:commit"
     source_uuid = uuid
 
     cpCommit += 1
 
-    pyail.feed_json_item(data, meta_commit, source, source_uuid, default_encoding)
+
+    if not debug:
+        pyail.feed_json_item(data, meta_commit, source, source_uuid, default_encoding)
+    else:
+        json_commit = {}
+        json_commit["data"] = data
+        json_commit["default-encoding"] = default_encoding
+        json_commit["meta"] = meta_commit
+        json_commit["source"] = source
+        json_commit["source_uuid"] = source_uuid
+        
+        with open(os.path.join(pathProg, "debug.json"), "a") as write_debug:
+            json.dump(json_commit, write_debug, indent=4)
     
     return cpCommit
 
@@ -271,6 +298,8 @@ def check_archive_folder(pathArchive, pathCurrentArchive, archive):
 
 ## Arguments parsing
 parser = argparse.ArgumentParser()
+parser.add_argument("-d", help="debug", action="store_true")
+
 parser.add_argument("-a", "--archiveName", help="date of the GHArchive to Download, YYYY-MM-DD-H, YYYY-MM-DD-{H..H}, YYYY-MM-{DD..DD}-{H..H}, YYYY-MM-{DD..DD}-H", required=True)
 parser.add_argument("--nocache", help="disable store of archive", action="store_true")
 
@@ -283,6 +312,8 @@ parser.add_argument("-fo", "--fileorg", help="file containing list of organisati
 parser.add_argument("-l", "--list", nargs="+", help="list of word to search. If no list is give, all commit message will be add")
 parser.add_argument("-fl", "--filelist", help="file containing list of word for commit message")
 args = parser.parse_args()
+
+debug = args.d
 
 ## Check for archiveName parameter
 x = re.match(r"[0-9]{4}\-[0-9]{2}\-\{?[0-9]{1,2}\.{0,2}[0-9]{0,2}\}?\-\{?[0-9]{1,2}\.{0,2}[0-9]{0,2}\}?", args.archiveName)
@@ -300,12 +331,13 @@ if 'archive' in config:
 pathCurrentArchive = os.path.join(pathArchive, "current")
 
 ## Ail
-try:
-    pyail = PyAIL(ail_url, ail_key, ssl=False)
-except Exception as e:
-    # print(e)
-    print("\n\n[-] Error during creation of AIL instance")
-    sys.exit(0)
+if not debug:
+    try:
+        pyail = PyAIL(ail_url, ail_key, ssl=False)
+    except Exception as e:
+        # print(e)
+        print("\n\n[-] Error during creation of AIL instance")
+        sys.exit(0)
 
 
 if not os.path.isdir(pathArchive):

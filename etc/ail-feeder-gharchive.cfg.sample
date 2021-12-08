@@ -8,5 +8,10 @@ api_token = <YOURAPIKEY>
 url = https://127.0.0.1:7020/api/v1/import/json/item
 apikey = <YOURAPIKEY> 
 
+[redis]
+host = 127.0.0.1
+port = 6379
+db = 0
+
 [archive]
 pathArchive = 
