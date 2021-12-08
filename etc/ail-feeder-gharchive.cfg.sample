@@ -2,7 +2,7 @@
 uuid = 80172ead-7023-496c-a4be-6ee280d8fbcf
 
 [github]
-api_token = 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
+api_token = <YOURAPIKEY>
 
 [ail]
 url = https://127.0.0.1:7020/api/v1/import/json/item
