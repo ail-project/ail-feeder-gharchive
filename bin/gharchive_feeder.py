@@ -4,6 +4,7 @@ import sys
 import json
 import gzip
 import time
+import redis
 import shutil
 import pathlib
 import argparse
@@ -25,6 +26,8 @@ if 'general' in config:
 
 if 'github' in config:
     api_token = config['github']['api_token']
+else:
+    api_token = ""
 
 if 'ail' in config:
     ail_url = config['ail']['url']
@@ -184,7 +187,10 @@ def json_process(element, i, cpPatch, cpCommit):
     header = {'Authorization': f'token {api_token}'}
 
     try:
-        response = requests.get(element["payload"]["commits"][i]["url"], headers=header)
+        if api_token:
+            response = requests.get(element["payload"]["commits"][i]["url"], headers=header)
+        else:
+            response = requests.get(element["payload"]["commits"][i]["url"])
     except requests.exceptions.ConnectionError:
         print("[-] Connection Error to GHArchive")
         exit(-1)
@@ -196,7 +202,10 @@ def json_process(element, i, cpPatch, cpCommit):
         flagCommit = True
         
         try:
-            response = requests.get(element["payload"]["commits"][i]["url"], headers=header)
+            if api_token:
+                response = requests.get(element["payload"]["commits"][i]["url"], headers=header)
+            else:
+                response = requests.get(element["payload"]["commits"][i]["url"])
         except requests.exceptions.ConnectionError:
             print("[-] Connection Error to GHArchive")
             exit(-1)
@@ -210,7 +219,10 @@ def json_process(element, i, cpPatch, cpCommit):
         header = {'Authorization': f'token {api_token}'}
         
         try:
-            response = requests.get(element["repo"]["url"], headers=header)
+            if api_token:
+                response = requests.get(element["repo"]["url"], headers=header)
+            else:
+                response = requests.get(element["repo"]["url"])
         except requests.exceptions.ConnectionError:
             print("[-] Connection Error to GHArchive")
             exit(-1)
@@ -219,7 +231,10 @@ def json_process(element, i, cpPatch, cpCommit):
         locRepoDelete, locCommitDelete, locRecur = api_process(json_api_repo, int(response.headers['X-RateLimit-Reset']))
         while flagRecur:
             try:
-                response = requests.get(element["payload"]["commits"][i]["url"], headers=header)
+                if api_token:
+                    response = requests.get(element["repo"]["url"], headers=header)
+                else:
+                    response = requests.get(element["repo"]["url"])
             except requests.exceptions.ConnectionError:
                 print("[-] Connection Error to GHArchive")
                 exit(-1)
@@ -256,7 +271,7 @@ def check_archive_folder(pathArchive, pathCurrentArchive, archive):
 
 ## Arguments parsing
 parser = argparse.ArgumentParser()
-parser.add_argument("datetime", help="date of the GHArchive, YYYY-MM-DD-H, YYYY-MM-DD-{H..H}, YYYY-MM-{DD..DD}-{H..H}, YYYY-MM-{DD..DD}-H")
+parser.add_argument("-a", "--archiveName", help="date of the GHArchive to Download, YYYY-MM-DD-H, YYYY-MM-DD-{H..H}, YYYY-MM-{DD..DD}-{H..H}, YYYY-MM-{DD..DD}-H", required=True)
 parser.add_argument("--nocache", help="disable store of archive", action="store_true")
 
 parser.add_argument("-u", "--users", nargs="+", help="search username")
@@ -269,13 +284,15 @@ parser.add_argument("-l", "--list", nargs="+", help="list of word to search. If 
 parser.add_argument("-fl", "--filelist", help="file containing list of word for commit message")
 args = parser.parse_args()
 
-## Check for datetime parameter
-x = re.match(r"[0-9]{4}\-[0-9]{2}\-\{?[0-9]{1,2}\.{0,2}[0-9]{0,2}\}?\-\{?[0-9]{1,2}\.{0,2}[0-9]{0,2}\}?", args.datetime)
+## Check for archiveName parameter
+x = re.match(r"[0-9]{4}\-[0-9]{2}\-\{?[0-9]{1,2}\.{0,2}[0-9]{0,2}\}?\-\{?[0-9]{1,2}\.{0,2}[0-9]{0,2}\}?", args.archiveName)
 if x == None:
-    print("[-] Date Format Error")
+    print("[-] Date Format Error, expected format: YYYY-MM-DD-H, YYYY-MM-DD-{H..H}, YYYY-MM-{DD..DD}-{H..H}, YYYY-MM-{DD..DD}-H")
     exit(-1)
 
-pathArchive = os.path.join(pathProg, "archive")
+head, tail = os.path.split(pathProg)
+
+pathArchive = os.path.join(head, "archive")
 if 'archive' in config:
     if config['archive']['pathArchive']:
         pathArchive = config['archive']['pathArchive']
@@ -316,16 +333,16 @@ if args.fileusers:
 
 ## Download archive file
 print("[+] Downloading...")
-if "{" in args.datetime:
+if "{" in args.archiveName:
     range_list = list()
-    currentDate = args.datetime.split("{")
+    currentDate = args.archiveName.split("{")
 
     for element in currentDate:
         if "}" in element:
             range_list.append(re.findall(r"[0-9]+", element))
 
     ## YYYY-MM-{DD..DD}-H
-    if re.search(r"{.*}$", str(args.datetime)) == None:
+    if re.search(r"{.*}$", str(args.archiveName)) == None:
         if int(range_list[0][0]) > 0 and int(range_list[0][1]) < 32:
             for i in range(int(range_list[0][0]), int(range_list[0][1]) + 1):
                 if i < 10:
@@ -371,9 +388,9 @@ if "{" in args.datetime:
             print("[-] Date Value Error for Days or Hours")
             exit(-1)
 else:
-    loc = args.datetime.split("-")
+    loc = args.archiveName.split("-")
     if (int(loc[1]) > 0 and int(loc[1]) < 13) and (int(loc[2]) > 0 and int(loc[2]) < 32) and (int(loc[3]) >= 0 and int(loc[3]) < 24):
-        url = f"https://data.gharchive.org/{args.datetime}.json.gz"
+        url = f"https://data.gharchive.org/{args.archiveName}.json.gz"
 
         if not check_archive_folder(pathArchive, pathCurrentArchive, url.split("/")[-1]):
             request = ["wget", url, "-P", pathCurrentArchive]
@@ -384,10 +401,10 @@ for archive in os.listdir(pathCurrentArchive):
     currentArchive = os.path.join(pathCurrentArchive, archive)
 
     ## Open json file
-    print("[+] Unizp...")
+    print("[+] Unzip...")
     data = [json.loads(line) for line in gzip.open(currentArchive, 'r')]
 
-    print("[+] Traitment...")
+    print("[+] Process...")
     ele_list = list()
 
     for element in data:
