@@ -40,7 +40,7 @@ else:
 
 
 ## Function
-def json_patch(element, i, j, cpPatch, json_api_repo, json_api):
+def json_patch(element, i, j, cpPatch, json_api_repo, json_api, date, time_element):
 
     data = j["patch"]
 
@@ -104,7 +104,7 @@ def json_patch(element, i, j, cpPatch, json_api_repo, json_api):
     return cpPatch
     
 
-def json_commit(element, i, cpCommit, flagCommitDelete, flagRepoDelete, json_api_repo, json_api):
+def json_commit(element, i, cpCommit, flagCommitDelete, flagRepoDelete, json_api_repo, json_api, date, time_element):
 
     data = element["payload"]["commits"][i]["message"]
     default_encoding = "UTF-8"
@@ -165,7 +165,7 @@ def json_commit(element, i, cpCommit, flagCommitDelete, flagRepoDelete, json_api
         json_commit["meta"] = meta_commit
         json_commit["source"] = source
         json_commit["source_uuid"] = source_uuid
-        
+
         with open(os.path.join(pathProg, "debug.json"), "a") as write_debug:
             json.dump(json_commit, write_debug, indent=4)
     
@@ -207,7 +207,7 @@ def api_process(json_api, time_to_wait):
     return flagRepoDelete, flagCommitDelete, flagRecur
 
 
-def json_process(element, i, cpPatch, cpCommit):
+def json_process(element, i, date, time_element, cpPatch, cpCommit):
     flagRepoDelete = flagCommitDelete = flagRecur = flagCommit = False
     locRepoDelete = locCommitDelete = locRecur = False
 
@@ -256,7 +256,7 @@ def json_process(element, i, cpPatch, cpCommit):
         json_api_repo = json.loads(response.content)
 
         locRepoDelete, locCommitDelete, locRecur = api_process(json_api_repo, int(response.headers['X-RateLimit-Reset']))
-        while flagRecur:
+        while locRecur:
             try:
                 if api_token:
                     response = requests.get(element["repo"]["url"], headers=header)
@@ -273,11 +273,11 @@ def json_process(element, i, cpPatch, cpCommit):
     if not flagCommitDelete and not flagRepoDelete:
         for j in json_api["files"]:
             if "patch" in j:
-                cpPatch = json_patch(element, i, j, cpPatch, json_api_repo, json_api)
+                cpPatch = json_patch(element, i, j, cpPatch, json_api_repo, json_api, date, time_element)
     if not flagCommit:
-        cpCommit = json_commit(element, i, cpCommit, flagCommitDelete, flagRepoDelete, json_api_repo, json_api)
+        cpCommit = json_commit(element, i, cpCommit, flagCommitDelete, flagRepoDelete, json_api_repo, json_api, date, time_element)
 
-    return cpPatch, cpCommit
+    return cpPatch, cpCommit, response.headers['X-RateLimit-Remaining']
 
 
 ## Check if archive already exist
@@ -322,8 +322,8 @@ if x == None:
     exit(-1)
 
 head, tail = os.path.split(pathProg)
-
 pathArchive = os.path.join(head, "archive")
+
 if 'archive' in config:
     if config['archive']['pathArchive']:
         pathArchive = config['archive']['pathArchive']
@@ -339,12 +339,20 @@ if not debug:
         print("\n\n[-] Error during creation of AIL instance")
         sys.exit(0)
 
-
 if not os.path.isdir(pathArchive):
     os.mkdir(pathArchive)
 if not os.path.isdir(pathCurrentArchive):
     os.mkdir(pathCurrentArchive)
+else:
+    # move last archive in case of precedente error
+    for archive in os.listdir(pathCurrentArchive):
+        fileSrc = os.path.join(pathCurrentArchive, archive)
+        fileDst = os.path.join(pathArchive, archive)
 
+        os.rename(fileSrc, fileDst)
+
+
+## claim entry parameters
 if args.users:
     list_users = args.users
 if args.org:
@@ -364,7 +372,6 @@ if args.fileusers:
 
 
 ## Download archive file
-print("[+] Downloading...")
 if "{" in args.archiveName:
     range_list = list()
     currentDate = args.archiveName.split("{")
@@ -383,8 +390,11 @@ if "{" in args.archiveName:
                     url = f"https://data.gharchive.org/{currentDate[0]}{i}-{range_list[0][2]}.json.gz"
 
                 if not check_archive_folder(pathArchive, pathCurrentArchive, url.split("/")[-1]):
+                    print("[+] Downloading...")
                     request = ["wget", url, "-P", pathCurrentArchive]
                     subprocessCall(request)
+                else:
+                    print("[+] Archive already Download")
         else:
             print("[-] Date Value Error for Days")
             exit(-1)
@@ -396,8 +406,11 @@ if "{" in args.archiveName:
                 url = f"https://data.gharchive.org/{currentDate[0]}{i}.json.gz"
 
                 if not check_archive_folder(pathArchive, pathCurrentArchive, url.split("/")[-1]):
+                    print("[+] Downloading...")
                     request = ["wget", url, "-P", pathCurrentArchive]
                     subprocessCall(request)
+                else:
+                    print("[+] Archive already Download")
         else:
             print("[-] Date Value Error for Hours")
             exit(-1)
@@ -414,8 +427,11 @@ if "{" in args.archiveName:
                     url += f"{j}.json.gz"
 
                     if not check_archive_folder(pathArchive, pathCurrentArchive, url.split("/")[-1]):
+                        print("[+] Downloading...")
                         request = ["wget", url, "-P", pathCurrentArchive]
                         subprocessCall(request)
+                    else:
+                        print("[+] Archive already Download")
         else:
             print("[-] Date Value Error for Days or Hours")
             exit(-1)
@@ -425,8 +441,12 @@ else:
         url = f"https://data.gharchive.org/{args.archiveName}.json.gz"
 
         if not check_archive_folder(pathArchive, pathCurrentArchive, url.split("/")[-1]):
+            print("[+] Downloading...")
             request = ["wget", url, "-P", pathCurrentArchive]
             subprocessCall(request)
+        else:
+            print("[+] Archive already Download")
+
 
 
 for archive in os.listdir(pathCurrentArchive):
@@ -438,7 +458,6 @@ for archive in os.listdir(pathCurrentArchive):
 
     print("[+] Process...")
     ele_list = list()
-
     for element in data:
         if element["type"] == "PushEvent":
             flag = False
@@ -461,26 +480,39 @@ for archive in os.listdir(pathCurrentArchive):
             if flag or (not args.org and not args.users and not args.fileorg and not args.fileusers):
                 ele_list.append(element)
 
-
     print("[+] Rule Creation")
     ## Rule creation
     cpCommit = 0
     cpPatch = 0
+    headerRemain = ""
+
     for element in ele_list:
         date = datetime.datetime.strptime(element["created_at"], "%Y-%m-%dT%H:%M:%SZ").strftime("%Y-%m-%d")
         time_element = datetime.datetime.strptime(element["created_at"], "%Y-%m-%dT%H:%M:%SZ").strftime("%H:%M:%S")
 
         uuid_parent = str(uuid4())
 
+        ## Check each commit message for remaining elements
+        print("[+] Check commit message if word or list are give in entry")
         for i in range(0,len(element["payload"]["commits"])):
-            if args.filelist or args.list:
+            if args.filelist:
                 for lines in list_leak:
                     if lines.rstrip("\n") in element["payload"]["commits"][i]["message"]:
-                        cpPatch, cpCommit = json_process(element, i, cpPatch, cpCommit)
+                        cpPatch, cpCommit, headerRemain = json_process(element, i, date, time_element, cpPatch, cpCommit)
+            ## If all pass words are in the commit message then do the process
+            ## and condition apply with all word give in entry
+            elif args.list:
+                flagListWord = True
+                for lines in list_leak:
+                    if not lines.rstrip("\n") in element["payload"]["commits"][i]["message"]:
+                        flagListWord = False
+                        break
+                if flagListWord:
+                    cpPatch, cpCommit, headerRemain = json_process(element, i, date, time_element, cpPatch, cpCommit)
             else:
-                cpPatch, cpCommit = json_process(element, i, cpPatch, cpCommit)
+                cpPatch, cpCommit, headerRemain = json_process(element, i, date, time_element, cpPatch, cpCommit)
                
-        print(f"\r[+] Commit JSON files: {cpCommit}, Patch JSON files: {cpPatch}", end="")
+        print(f"\r\t[+] Commit JSON files: {cpCommit}, Patch JSON files: {cpPatch}, API call remaining: {headerRemain}", end="")
         
 if args.nocache:
     shutil.rmtree(pathArchive)
