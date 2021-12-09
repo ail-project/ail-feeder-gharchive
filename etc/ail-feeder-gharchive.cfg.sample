@@ -4,6 +4,9 @@ uuid = 80172ead-7023-496c-a4be-6ee280d8fbcf
 [github]
 api_token = <YOURAPIKEY>
 
+[cache]
+expire = 86400
+
 [ail]
 url = https://127.0.0.1:7020/api/v1/import/json/item
 apikey = <YOURAPIKEY> 

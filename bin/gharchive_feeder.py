@@ -29,6 +29,11 @@ if 'github' in config:
 else:
     api_token = ""
 
+if 'cache' in config:
+    cache_expire = config['cache']['expire']
+else:
+    cache_expire = 86400
+
 if 'ail' in config:
     ail_url = config['ail']['url']
     ail_key = config['ail']['apikey']
@@ -478,7 +483,14 @@ for archive in os.listdir(pathCurrentArchive):
 
             ## org or user match with entry
             if flag or (not args.org and not args.users and not args.fileorg and not args.fileusers):
-                ele_list.append(element)
+                ## If cache is active, check in redis db to see if this event have already process
+                if not r.exists("event:{}".format(element["id"])) or args.nocache:
+                    if not args.nocache:
+                        r.set("event:{}".format(element["id"]), element["id"])
+                        r.expire("event:{}".format(element["id"]), cache_expire)
+                    ele_list.append(element)
+                else:
+                    print("already done")
 
     print("[+] Rule Creation")
     ## Rule creation
@@ -486,6 +498,7 @@ for archive in os.listdir(pathCurrentArchive):
     cpPatch = 0
     headerRemain = ""
 
+    print("\t[+] Check commit message if word or list are give in entry")
     for element in ele_list:
         date = datetime.datetime.strptime(element["created_at"], "%Y-%m-%dT%H:%M:%SZ").strftime("%Y-%m-%d")
         time_element = datetime.datetime.strptime(element["created_at"], "%Y-%m-%dT%H:%M:%SZ").strftime("%H:%M:%S")
@@ -493,7 +506,6 @@ for archive in os.listdir(pathCurrentArchive):
         uuid_parent = str(uuid4())
 
         ## Check each commit message for remaining elements
-        print("[+] Check commit message if word or list are give in entry")
         for i in range(0,len(element["payload"]["commits"])):
             if args.filelist:
                 for lines in list_leak:
@@ -513,7 +525,8 @@ for archive in os.listdir(pathCurrentArchive):
                 cpPatch, cpCommit, headerRemain = json_process(element, i, date, time_element, cpPatch, cpCommit)
                
         print(f"\r\t[+] Commit JSON files: {cpCommit}, Patch JSON files: {cpPatch}, API call remaining: {headerRemain}", end="")
-        
+print()
+
 if args.nocache:
     shutil.rmtree(pathArchive)
 else:
