@@ -304,6 +304,7 @@ def check_archive_folder(pathArchive, pathCurrentArchive, archive):
 ## Arguments parsing
 parser = argparse.ArgumentParser()
 parser.add_argument("-d", help="debug", action="store_true")
+parser.add_argument("-v", help="verbose, more display", action="store_true")
 
 parser.add_argument("-a", "--archiveName", help="date of the GHArchive to Download, YYYY-MM-DD-H, YYYY-MM-DD-{H..H}, YYYY-MM-{DD..DD}-{H..H}, YYYY-MM-{DD..DD}-H", required=True)
 parser.add_argument("--nocache", help="disable store of archive", action="store_true")
@@ -319,6 +320,7 @@ parser.add_argument("-fl", "--filelist", help="file containing list of word for 
 args = parser.parse_args()
 
 debug = args.d
+verbose = args.v
 
 ## Check for archiveName parameter
 x = re.match(r"[0-9]{4}\-[0-9]{2}\-\{?[0-9]{1,2}\.{0,2}[0-9]{0,2}\}?\-\{?[0-9]{1,2}\.{0,2}[0-9]{0,2}\}?", args.archiveName)
@@ -396,7 +398,10 @@ if "{" in args.archiveName:
 
                 if not check_archive_folder(pathArchive, pathCurrentArchive, url.split("/")[-1]):
                     print("[+] Downloading...")
-                    request = ["wget", url, "-P", pathCurrentArchive]
+                    if verbose:
+                        request = ["wget", url, "-P", pathCurrentArchive]
+                    else:
+                        request = ["wget", "-q", url, "-P", pathCurrentArchive]
                     subprocessCall(request)
                 else:
                     print("[+] Archive already Download")
@@ -412,7 +417,10 @@ if "{" in args.archiveName:
 
                 if not check_archive_folder(pathArchive, pathCurrentArchive, url.split("/")[-1]):
                     print("[+] Downloading...")
-                    request = ["wget", url, "-P", pathCurrentArchive]
+                    if verbose:
+                        request = ["wget", url, "-P", pathCurrentArchive]
+                    else:
+                        request = ["wget", "-q", url, "-P", pathCurrentArchive]
                     subprocessCall(request)
                 else:
                     print("[+] Archive already Download")
@@ -433,7 +441,10 @@ if "{" in args.archiveName:
 
                     if not check_archive_folder(pathArchive, pathCurrentArchive, url.split("/")[-1]):
                         print("[+] Downloading...")
-                        request = ["wget", url, "-P", pathCurrentArchive]
+                        if verbose:
+                            request = ["wget", url, "-P", pathCurrentArchive]
+                        else:
+                            request = ["wget", "-q", url, "-P", pathCurrentArchive]
                         subprocessCall(request)
                     else:
                         print("[+] Archive already Download")
@@ -447,7 +458,10 @@ else:
 
         if not check_archive_folder(pathArchive, pathCurrentArchive, url.split("/")[-1]):
             print("[+] Downloading...")
-            request = ["wget", url, "-P", pathCurrentArchive]
+            if verbose:
+                request = ["wget", url, "-P", pathCurrentArchive]
+            else:
+                request = ["wget", "-q", url, "-P", pathCurrentArchive]
             subprocessCall(request)
         else:
             print("[+] Archive already Download")
@@ -489,8 +503,8 @@ for archive in os.listdir(pathCurrentArchive):
                         r.set("event:{}".format(element["id"]), element["id"])
                         r.expire("event:{}".format(element["id"]), cache_expire)
                     ele_list.append(element)
-                else:
-                    print("already done")
+                elif verbose:
+                    print(f"Already done for PushEvent {element['id']}")
 
     print("[+] Rule Creation")
     ## Rule creation
@@ -498,7 +512,9 @@ for archive in os.listdir(pathCurrentArchive):
     cpPatch = 0
     headerRemain = ""
 
-    print("\t[+] Check commit message if word or list are give in entry")
+    if verbose:
+        print("\t[+] Check commit message if word or list are give in entry")
+
     for element in ele_list:
         date = datetime.datetime.strptime(element["created_at"], "%Y-%m-%dT%H:%M:%SZ").strftime("%Y-%m-%d")
         time_element = datetime.datetime.strptime(element["created_at"], "%Y-%m-%dT%H:%M:%SZ").strftime("%H:%M:%S")
