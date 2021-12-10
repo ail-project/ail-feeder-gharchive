@@ -7,18 +7,17 @@ This AIL feeder is a generic software to extract informations from [GHArchive](h
 # Usage
 
 ~~~shell
-dacru@dacru:~/git/ail-feeder-gharchive/bin$ python3 gharchive_feeder.py --help
-usage: gharchive_feeder.py [-h] [--nocache] [-u USERS [USERS ...]]
-                           [-fu FILEUSERS] [-o ORG [ORG ...]] [-fo FILEORG]
-                           [-l LIST [LIST ...]] [-fl FILELIST]
-                           datetime
-
-positional arguments:
-  datetime              date of the GHArchive, YYYY-MM-DD-H, YYYY-MM-
-                        DD-{H..H}, YYYY-MM-{DD..DD}-{H..H}, YYYY-MM-{DD..DD}-H
+dacru@dacru:~/git/ail-feeder-gharchive/bin$ python3 gharchive_feeder.py --help  
+usage: gharchive_feeder.py [-h] [-d] [-v] -a ARCHIVENAME [--nocache] [-u USERS [USERS ...]] 
+						   [-fu FILEUSERS] [-o ORG [ORG ...]] [-fo FILEORG] 
+						   [-w WORDS [WORDS ...]] [-fw FILEWORD]
 
 optional arguments:
   -h, --help            show this help message and exit
+  -d                    debug
+  -v                    verbose, more display
+  -a ARCHIVENAME, --archiveName ARCHIVENAME
+                        date of the GHArchive to Download, YYYY-MM-DD-H, YYYY-MM-DD-{H..H}, YYYY-MM-{DD..DD}-{H..H}, YYYY-MM-{DD..DD}-H
   --nocache             disable store of archive
   -u USERS [USERS ...], --users USERS [USERS ...]
                         search username
@@ -28,12 +27,50 @@ optional arguments:
                         search organisation
   -fo FILEORG, --fileorg FILEORG
                         file containing list of organisations
-  -l LIST [LIST ...], --list LIST [LIST ...]
-                        list of word to search. If no list is give, all commit
-                        message will be add
-  -fl FILELIST, --filelist FILELIST
+  -w WORDS [WORDS ...], --words WORDS [WORDS ...]
+                        list of words to search. If no words is give, all commit message will be add
+  -fw FILEWORD, --fileword FILEWORD
+                        file containing list of words for commit message
 
 ~~~
+
+
+
+
+
+# Example of use
+
+1. Download the archive for: 2 am, 1 October 2021
+
+~~~
+dacru@dacru:~/git/ail-feeder-gharchive/bin$ python3 gharchive_feeder.py -a 2021-10-01-2
+~~~
+
+
+
+2. Download the archive for: 15 pm, 2 October 2021. Search for "password"  and for "removed" in commit message
+
+~~~
+dacru@dacru:~/git/ail-feeder-gharchive/bin$ python3 gharchive_feeder.py -a 2021-10-01-2 -w password removed
+~~~
+
+
+
+3. Download the archive for: 15 pm, 2 October 2021. Search for "password"  and for "removed" in commit message for the org CIRCL
+
+~~~
+dacru@dacru:~/git/ail-feeder-gharchive/bin$ python3 gharchive_feeder.py -a 2021-10-01-2 -w password removed -o CIRCL
+~~~
+
+
+
+4. Download the archive for: 15 pm, 2 October 2021. Search for "password"  and for "removed" in commit message for the user DavidCruciani
+
+~~~
+dacru@dacru:~/git/ail-feeder-gharchive/bin$ python3 gharchive_feeder.py -a 2021-10-01-2 -w password removed -u DavidCruciani
+~~~
+
+
 
 
 
@@ -55,6 +92,7 @@ Using the AIL API, `data` will be compress in gzip format and encode with base64
 # (main) Requirements
 
 - [PyAIL](https://github.com/ail-project/PyAIL)
+- [redis](https://github.com/redis/redis-py)
 
 
 
@@ -89,7 +127,7 @@ Using the AIL API, `data` will be compress in gzip format and encode with base64
         "github:timestamp": "00:00:01",
         "github:timezone": "UTC"
     },
-    "source": "commit",
+    "source": "gharchive:commit",
     "source-uuid": "80172ead-7023-496c-a4be-6ee280d8fbcf"
 }
 ~~~
@@ -125,7 +163,7 @@ Using the AIL API, `data` will be compress in gzip format and encode with base64
         "github:timezone": "UTC",
         "github:parent": "3304d136-ccef-4cee-9ec3-169022547eff"
     },
-    "source": "patch",
+    "source": "gharchive:patch",
     "source-uuid": "80172ead-7023-496c-a4be-6ee280d8fbcf"
 }
 ~~~

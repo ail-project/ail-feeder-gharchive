@@ -315,8 +315,8 @@ parser.add_argument("-fu", "--fileusers", help="file containing list of username
 parser.add_argument("-o", "--org", nargs="+", help="search organisation")
 parser.add_argument("-fo", "--fileorg", help="file containing list of organisations")
 
-parser.add_argument("-l", "--list", nargs="+", help="list of word to search. If no list is give, all commit message will be add")
-parser.add_argument("-fl", "--filelist", help="file containing list of word for commit message")
+parser.add_argument("-w", "--words", nargs="+", help="list of words to search. If no words is give, all commit message will be add")
+parser.add_argument("-fw", "--fileword", help="file containing list of words for commit message")
 args = parser.parse_args()
 
 debug = args.d
