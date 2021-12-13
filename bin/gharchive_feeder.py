@@ -216,67 +216,50 @@ def api_process(json_api, time_to_wait):
     return flagRepoDelete, flagCommitDelete, flagRecur
 
 
+## Call to requests giving a specific url
+def requestsCall(url):
+    header = {'Authorization': f'token {api_token}'}
+
+    try:
+        if api_token:
+            response = requests.get(url, headers=header)
+        else:
+            response = requests.get(url)
+    except requests.exceptions.ConnectionError:
+        print("[-] Connection Error to GHArchive")
+        exit(-1)
+    
+    return response
+
+
 def json_process(element, i, date, time_element, cpPatch, cpCommit):
     flagRepoDelete = flagCommitDelete = flagRecur = flagCommit = False
     locRepoDelete = locCommitDelete = locRecur = False
 
-    header = {'Authorization': f'token {api_token}'}
-    try:
-        if api_token:
-            response = requests.get(element["payload"]["commits"][i]["url"], headers=header)
-        else:
-            response = requests.get(element["payload"]["commits"][i]["url"])
-    except requests.exceptions.ConnectionError:
-        print("[-] Connection Error to GHArchive")
-        exit(-1)
-
+    # Get commit info like patch
+    response = requestsCall(element["payload"]["commits"][i]["url"])
     json_api = json.loads(response.content)
 
     flagRepoDelete, flagCommitDelete, flagRecur = api_process(json_api, int(response.headers['X-RateLimit-Reset']))
 
     while flagRecur:
         flagCommit = True
-        
-        try:
-            if api_token:
-                response = requests.get(element["payload"]["commits"][i]["url"], headers=header)
-            else:
-                response = requests.get(element["payload"]["commits"][i]["url"])
-        except requests.exceptions.ConnectionError:
-            print("[-] Connection Error to GHArchive")
-            exit(-1)
 
+        response = requestsCall(element["payload"]["commits"][i]["url"])
         json_api = json.loads(response.content)
 
         flagRepoDelete, flagCommitDelete, flagRecur = api_process(json_api, int(response.headers['X-RateLimit-Reset']))
 
     ## Get repo owner
     json_api_repo = None
-
     if not flagRepoDelete:
-        header = {'Authorization': f'token {api_token}'}
-        
-        try:
-            if api_token:
-                response = requests.get(element["repo"]["url"], headers=header)
-            else:
-                response = requests.get(element["repo"]["url"])
-        except requests.exceptions.ConnectionError:
-            print("[-] Connection Error to GHArchive")
-            exit(-1)
+        response = requestsCall(element["repo"]["url"])
             
         json_api_repo = json.loads(response.content)
 
         locRepoDelete, locCommitDelete, locRecur = api_process(json_api_repo, int(response.headers['X-RateLimit-Reset']))
         while locRecur:
-            try:
-                if api_token:
-                    response = requests.get(element["repo"]["url"], headers=header)
-                else:
-                    response = requests.get(element["repo"]["url"])
-            except requests.exceptions.ConnectionError:
-                print("[-] Connection Error to GHArchive")
-                exit(-1)
+            response = requestsCall(element["repo"]["url"])
             json_api = json.loads(response.content)
 
             locRepoDelete, locCommitDelete, locRecur = api_process(json_api_repo, int(response.headers['X-RateLimit-Reset']))
@@ -371,11 +354,11 @@ if args.users:
     list_users = args.users
 if args.org:
     list_org = args.org
-if args.list:
-    list_words = args.list
+if args.words:
+    list_words = args.words
 
-if args.filelist:
-    with open(args.filelist, "r") as read_file:
+if args.fileword:
+    with open(args.fileword, "r") as read_file:
         list_words = read_file.readlines()
 if args.fileorg:
     with open(args.fileorg, "r") as read_file:
@@ -530,13 +513,13 @@ for archive in os.listdir(pathCurrentArchive):
 
         ## Check each commit message for remaining elements
         for i in range(0,len(element["payload"]["commits"])):
-            if args.filelist:
+            if args.fileword:
                 for lines in list_words:
                     if lines.rstrip("\n") in element["payload"]["commits"][i]["message"]:
                         cpPatch, cpCommit, headerRemain = json_process(element, i, date, time_element, cpPatch, cpCommit)
             ## If all pass words are in the commit message then do the process
             ## and condition apply with all word give in entry
-            elif args.list:
+            elif args.words:
                 flagListWord = True
                 for lines in list_words:
                     if not lines.rstrip("\n") in element["payload"]["commits"][i]["message"]:
