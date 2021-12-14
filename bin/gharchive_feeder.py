@@ -1,3 +1,8 @@
+"""
+Gharchive-feeder collect information from gharchive and push the revelant one to AIL.
+Research can be using username, org, or only words in commit message.
+"""
+
 import os
 import re
 import sys
@@ -46,8 +51,8 @@ else:
 
 ## Function
 
-## creation of json for patch part
 def json_patch(element, i, j, cpPatch, json_api_repo, json_api, date, time_element):
+    """Creation of json for patch part"""
 
     data = j["patch"]
     default_encoding = "UTF-8"
@@ -107,9 +112,10 @@ def json_patch(element, i, j, cpPatch, json_api_repo, json_api, date, time_eleme
             json.dump(json_patch, write_debug, indent=4)
     
     return cpPatch
-    
-## creation of json for commit part
+
+
 def json_commit(element, i, cpCommit, flagCommitDelete, flagRepoDelete, json_api_repo, json_api, date, time_element):
+    """Creation of json for commit part"""
 
     data = element["payload"]["commits"][i]["message"]
     default_encoding = "UTF-8"
@@ -179,17 +185,20 @@ def json_commit(element, i, cpCommit, flagCommitDelete, flagRepoDelete, json_api
     
     return cpCommit
 
-## Call for subprocess function
+
 def subprocessCall(request):
+    """Call for subprocess function"""
+
     p = subprocess.Popen(request, stdout=subprocess.PIPE)
     (output, err) = p.communicate()
     p_status = p.wait()
 
     return output
 
-
-## Process for the response message of API
+ 
 def api_process(json_api, time_to_wait):
+    """Process for the response message of API"""
+
     flagRepoDelete = flagCommitDelete = flagRecur = False
 
     if "message" in json_api:
@@ -216,8 +225,8 @@ def api_process(json_api, time_to_wait):
     return flagRepoDelete, flagCommitDelete, flagRecur
 
 
-## Call to requests giving a specific url
 def requestsCall(url):
+    """Call to requests giving a specific url"""
     header = {'Authorization': f'token {api_token}'}
 
     try:
@@ -233,6 +242,8 @@ def requestsCall(url):
 
 
 def json_process(element, i, date, time_element, cpPatch, cpCommit):
+    """API calls for repo and commit and json creation"""
+
     flagRepoDelete = flagCommitDelete = flagRecur = flagCommit = False
     locRepoDelete = locCommitDelete = locRecur = False
 
@@ -275,8 +286,9 @@ def json_process(element, i, date, time_element, cpPatch, cpCommit):
     return cpPatch, cpCommit, response.headers['X-RateLimit-Remaining']
 
 
-## Check if archive already exist
 def check_archive_folder(pathArchive, pathCurrentArchive, archive):
+    """Check if archive already exist"""
+
     for file in os.listdir(pathCurrentArchive):
         if file == archive:
             return True
@@ -290,144 +302,101 @@ def check_archive_folder(pathArchive, pathCurrentArchive, archive):
 
 
 
+if __name__ == '__main__':
+    ## Arguments parsing
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", help="debug", action="store_true")
+    parser.add_argument("-v", help="verbose, more display", action="store_true")
 
-## Arguments parsing
-parser = argparse.ArgumentParser()
-parser.add_argument("-d", help="debug", action="store_true")
-parser.add_argument("-v", help="verbose, more display", action="store_true")
+    parser.add_argument("-a", "--archiveName", help="date of the GHArchive to Download, YYYY-MM-DD-H, YYYY-MM-DD-{H..H}, YYYY-MM-{DD..DD}-{H..H}, YYYY-MM-{DD..DD}-H", required=True)
+    parser.add_argument("--nocache", help="disable store of archive", action="store_true")
 
-parser.add_argument("-a", "--archiveName", help="date of the GHArchive to Download, YYYY-MM-DD-H, YYYY-MM-DD-{H..H}, YYYY-MM-{DD..DD}-{H..H}, YYYY-MM-{DD..DD}-H", required=True)
-parser.add_argument("--nocache", help="disable store of archive", action="store_true")
+    parser.add_argument("-u", "--users", nargs="+", help="search username")
+    parser.add_argument("-fu", "--fileusers", help="file containing list of username")
 
-parser.add_argument("-u", "--users", nargs="+", help="search username")
-parser.add_argument("-fu", "--fileusers", help="file containing list of username")
+    parser.add_argument("-o", "--org", nargs="+", help="search organisation")
+    parser.add_argument("-fo", "--fileorg", help="file containing list of organisations")
 
-parser.add_argument("-o", "--org", nargs="+", help="search organisation")
-parser.add_argument("-fo", "--fileorg", help="file containing list of organisations")
+    parser.add_argument("-w", "--words", nargs="+", help="list of words to search. If no words is give, all commit message will be add")
+    parser.add_argument("-fw", "--fileword", help="file containing list of words for commit message")
+    args = parser.parse_args()
 
-parser.add_argument("-w", "--words", nargs="+", help="list of words to search. If no words is give, all commit message will be add")
-parser.add_argument("-fw", "--fileword", help="file containing list of words for commit message")
-args = parser.parse_args()
+    debug = args.d
+    verbose = args.v
 
-debug = args.d
-verbose = args.v
+    ## Check for archiveName parameter
+    x = re.match(r"[0-9]{4}\-[0-9]{2}\-\{?[0-9]{1,2}\.{0,2}[0-9]{0,2}\}?\-\{?[0-9]{1,2}\.{0,2}[0-9]{0,2}\}?", args.archiveName)
+    if x == None:
+        print("[-] Date Format Error, expected format: YYYY-MM-DD-H, YYYY-MM-DD-{H..H}, YYYY-MM-{DD..DD}-{H..H}, YYYY-MM-{DD..DD}-H")
+        exit(-1)
 
-## Check for archiveName parameter
-x = re.match(r"[0-9]{4}\-[0-9]{2}\-\{?[0-9]{1,2}\.{0,2}[0-9]{0,2}\}?\-\{?[0-9]{1,2}\.{0,2}[0-9]{0,2}\}?", args.archiveName)
-if x == None:
-    print("[-] Date Format Error, expected format: YYYY-MM-DD-H, YYYY-MM-DD-{H..H}, YYYY-MM-{DD..DD}-{H..H}, YYYY-MM-{DD..DD}-H")
-    exit(-1)
+    head, tail = os.path.split(pathProg)
+    pathArchive = os.path.join(head, "archive")
 
-head, tail = os.path.split(pathProg)
-pathArchive = os.path.join(head, "archive")
+    if 'archive' in config:
+        if config['archive']['pathArchive']:
+            pathArchive = config['archive']['pathArchive']
 
-if 'archive' in config:
-    if config['archive']['pathArchive']:
-        pathArchive = config['archive']['pathArchive']
+    pathCurrentArchive = os.path.join(pathArchive, "current")
 
-pathCurrentArchive = os.path.join(pathArchive, "current")
+    ## Ail
+    if not debug:
+        try:
+            pyail = PyAIL(ail_url, ail_key, ssl=False)
+        except Exception as e:
+            # print(e)
+            print("\n\n[-] Error during creation of AIL instance")
+            sys.exit(0)
 
-## Ail
-if not debug:
-    try:
-        pyail = PyAIL(ail_url, ail_key, ssl=False)
-    except Exception as e:
-        # print(e)
-        print("\n\n[-] Error during creation of AIL instance")
-        sys.exit(0)
+    if not os.path.isdir(pathArchive):
+        os.mkdir(pathArchive)
+    if not os.path.isdir(pathCurrentArchive):
+        os.mkdir(pathCurrentArchive)
+    else:
+        # move last archive in case of precedente error
+        for archive in os.listdir(pathCurrentArchive):
+            fileSrc = os.path.join(pathCurrentArchive, archive)
+            fileDst = os.path.join(pathArchive, archive)
 
-if not os.path.isdir(pathArchive):
-    os.mkdir(pathArchive)
-if not os.path.isdir(pathCurrentArchive):
-    os.mkdir(pathCurrentArchive)
-else:
-    # move last archive in case of precedente error
-    for archive in os.listdir(pathCurrentArchive):
-        fileSrc = os.path.join(pathCurrentArchive, archive)
-        fileDst = os.path.join(pathArchive, archive)
-
-        os.rename(fileSrc, fileDst)
-
-
-## claim entry parameters
-if args.users:
-    list_users = args.users
-if args.org:
-    list_org = args.org
-if args.words:
-    list_words = args.words
-
-if args.fileword:
-    with open(args.fileword, "r") as read_file:
-        list_words = read_file.readlines()
-if args.fileorg:
-    with open(args.fileorg, "r") as read_file:
-        list_org = read_file.readlines()
-if args.fileusers:
-    with open(args.fileusers, "r") as read_file:
-        list_users = read_file.readlines()
+            os.rename(fileSrc, fileDst)
 
 
-## Download archive file
-if "{" in args.archiveName:
-    range_list = list()
-    currentDate = args.archiveName.split("{")
+    ## claim entry parameters
+    if args.users:
+        list_users = args.users
+    if args.org:
+        list_org = args.org
+    if args.words:
+        list_words = args.words
 
-    for element in currentDate:
-        if "}" in element:
-            range_list.append(re.findall(r"[0-9]+", element))
+    if args.fileword:
+        with open(args.fileword, "r") as read_file:
+            list_words = read_file.readlines()
+    if args.fileorg:
+        with open(args.fileorg, "r") as read_file:
+            list_org = read_file.readlines()
+    if args.fileusers:
+        with open(args.fileusers, "r") as read_file:
+            list_users = read_file.readlines()
 
-    ## YYYY-MM-{DD..DD}-H
-    if re.search(r"{.*}$", str(args.archiveName)) == None:
-        if int(range_list[0][0]) > 0 and int(range_list[0][1]) < 32:
-            for i in range(int(range_list[0][0]), int(range_list[0][1]) + 1):
-                if i < 10:
-                    url = f"https://data.gharchive.org/{currentDate[0]}0{i}-{range_list[0][2]}.json.gz"
-                else:
-                    url = f"https://data.gharchive.org/{currentDate[0]}{i}-{range_list[0][2]}.json.gz"
 
-                if not check_archive_folder(pathArchive, pathCurrentArchive, url.split("/")[-1]):
-                    print("[+] Downloading...")
-                    if verbose:
-                        request = ["wget", url, "-P", pathCurrentArchive]
-                    else:
-                        request = ["wget", "-q", url, "-P", pathCurrentArchive]
-                    subprocessCall(request)
-                else:
-                    print("[+] Archive already Download")
-        else:
-            print("[-] Date Value Error for Days")
-            exit(-1)
-    
-    ## YYYY-MM-DD-{HH..HH}
-    if len(range_list) == 1:
-        if int(range_list[0][0]) >= 0 and int(range_list[0][1]) < 24:
-            for i in range(int(range_list[0][0]), int(range_list[0][1]) + 1):
-                url = f"https://data.gharchive.org/{currentDate[0]}{i}.json.gz"
+    ## Download archive file
+    if "{" in args.archiveName:
+        range_list = list()
+        currentDate = args.archiveName.split("{")
 
-                if not check_archive_folder(pathArchive, pathCurrentArchive, url.split("/")[-1]):
-                    print("[+] Downloading...")
-                    if verbose:
-                        request = ["wget", url, "-P", pathCurrentArchive]
-                    else:
-                        request = ["wget", "-q", url, "-P", pathCurrentArchive]
-                    subprocessCall(request)
-                else:
-                    print("[+] Archive already Download")
-        else:
-            print("[-] Date Value Error for Hours")
-            exit(-1)
+        for element in currentDate:
+            if "}" in element:
+                range_list.append(re.findall(r"[0-9]+", element))
 
-    ## YYYY-MM-{DD..DD}-{H..H}
-    elif len(range_list) == 2:
-        if ( int(range_list[0][0]) > 0 and int(range_list[0][1]) < 32 ) and int(range_list[0][0]) >= 0 and int(range_list[0][1]) < 24:
-            for i in range(int(range_list[0][0]), int(range_list[0][1]) + 1):
-                for j in range(int(range_list[0][0]), int(range_list[0][1]) + 1):
+        ## YYYY-MM-{DD..DD}-H
+        if re.search(r"{.*}$", str(args.archiveName)) == None:
+            if int(range_list[0][0]) > 0 and int(range_list[0][1]) < 32:
+                for i in range(int(range_list[0][0]), int(range_list[0][1]) + 1):
                     if i < 10:
-                        url = f"https://data.gharchive.org/{currentDate[0]}0{i}-"
+                        url = f"https://data.gharchive.org/{currentDate[0]}0{i}-{range_list[0][2]}.json.gz"
                     else:
-                        url = f"https://data.gharchive.org/{currentDate[0]}{i}-"
-                    url += f"{j}.json.gz"
+                        url = f"https://data.gharchive.org/{currentDate[0]}{i}-{range_list[0][2]}.json.gz"
 
                     if not check_archive_folder(pathArchive, pathCurrentArchive, url.split("/")[-1]):
                         print("[+] Downloading...")
@@ -438,106 +407,149 @@ if "{" in args.archiveName:
                         subprocessCall(request)
                     else:
                         print("[+] Archive already Download")
-        else:
-            print("[-] Date Value Error for Days or Hours")
-            exit(-1)
-else:
-    loc = args.archiveName.split("-")
-    if (int(loc[1]) > 0 and int(loc[1]) < 13) and (int(loc[2]) > 0 and int(loc[2]) < 32) and (int(loc[3]) >= 0 and int(loc[3]) < 24):
-        url = f"https://data.gharchive.org/{args.archiveName}.json.gz"
-
-        if not check_archive_folder(pathArchive, pathCurrentArchive, url.split("/")[-1]):
-            print("[+] Downloading...")
-            if verbose:
-                request = ["wget", url, "-P", pathCurrentArchive]
             else:
-                request = ["wget", "-q", url, "-P", pathCurrentArchive]
-            subprocessCall(request)
-        else:
-            print("[+] Archive already Download")
+                print("[-] Date Value Error for Days")
+                exit(-1)
+        
+        ## YYYY-MM-DD-{HH..HH}
+        if len(range_list) == 1:
+            if int(range_list[0][0]) >= 0 and int(range_list[0][1]) < 24:
+                for i in range(int(range_list[0][0]), int(range_list[0][1]) + 1):
+                    url = f"https://data.gharchive.org/{currentDate[0]}{i}.json.gz"
 
-
-
-for archive in os.listdir(pathCurrentArchive):
-    currentArchive = os.path.join(pathCurrentArchive, archive)
-
-    ## Open json file
-    print("[+] Unzip...")
-    data = [json.loads(line) for line in gzip.open(currentArchive, 'r')]
-
-    print("[+] Process...")
-    ele_list = list()
-    for element in data:
-        if element["type"] == "PushEvent":
-            flag = False
-            if args.org or args.fileorg:
-                if "org" in element:
-                    for orgs in list_org:
-                        if orgs.rstrip("\n") == element["org"]["login"]:
-                            flag = True
-                            break
-            if args.users or args.fileusers:
-                for i in range(0, len(element["payload"]["commits"])):
-                    for users in list_users:
-                        if users.rstrip("\n") == element["payload"]["commits"][i]["author"]["name"]:
-                            flag = True
-                            break
-                    if flag:
-                        break
-
-            ## org or user match with entry
-            if flag or (not args.org and not args.users and not args.fileorg and not args.fileusers):
-                ## If cache is active, check in redis db to see if this event have already process
-                if not r.exists("event:{}".format(element["id"])) or args.nocache:
-                    if not args.nocache:
-                        r.set("event:{}".format(element["id"]), element["id"])
-                        r.expire("event:{}".format(element["id"]), cache_expire)
-                    ele_list.append(element)
-                elif verbose:
-                    print(f"Already done for PushEvent {element['id']}")
-
-    print("[+] Rule Creation")
-    ## Rule creation
-    cpCommit = 0
-    cpPatch = 0
-    headerRemain = ""
-
-    if verbose:
-        print("\t[+] Check commit message if word or list are give in entry")
-
-    for element in ele_list:
-        date = datetime.datetime.strptime(element["created_at"], "%Y-%m-%dT%H:%M:%SZ").strftime("%Y-%m-%d")
-        time_element = datetime.datetime.strptime(element["created_at"], "%Y-%m-%dT%H:%M:%SZ").strftime("%H:%M:%S")
-
-        uuid_parent = str(uuid4())
-
-        ## Check each commit message for remaining elements
-        for i in range(0,len(element["payload"]["commits"])):
-            if args.fileword:
-                for lines in list_words:
-                    if lines.rstrip("\n") in element["payload"]["commits"][i]["message"]:
-                        cpPatch, cpCommit, headerRemain = json_process(element, i, date, time_element, cpPatch, cpCommit)
-            ## If all pass words are in the commit message then do the process
-            ## and condition apply with all word give in entry
-            elif args.words:
-                flagListWord = True
-                for lines in list_words:
-                    if not lines.rstrip("\n") in element["payload"]["commits"][i]["message"]:
-                        flagListWord = False
-                        break
-                if flagListWord:
-                    cpPatch, cpCommit, headerRemain = json_process(element, i, date, time_element, cpPatch, cpCommit)
+                    if not check_archive_folder(pathArchive, pathCurrentArchive, url.split("/")[-1]):
+                        print("[+] Downloading...")
+                        if verbose:
+                            request = ["wget", url, "-P", pathCurrentArchive]
+                        else:
+                            request = ["wget", "-q", url, "-P", pathCurrentArchive]
+                        subprocessCall(request)
+                    else:
+                        print("[+] Archive already Download")
             else:
-                cpPatch, cpCommit, headerRemain = json_process(element, i, date, time_element, cpPatch, cpCommit)
-               
-        print(f"\r\t[+] Commit JSON files: {cpCommit}, Patch JSON files: {cpPatch}, API call remaining: {headerRemain}", end="")
-print()
+                print("[-] Date Value Error for Hours")
+                exit(-1)
 
-if args.nocache:
-    shutil.rmtree(pathArchive)
-else:
+        ## YYYY-MM-{DD..DD}-{H..H}
+        elif len(range_list) == 2:
+            if ( int(range_list[0][0]) > 0 and int(range_list[0][1]) < 32 ) and int(range_list[0][0]) >= 0 and int(range_list[0][1]) < 24:
+                for i in range(int(range_list[0][0]), int(range_list[0][1]) + 1):
+                    for j in range(int(range_list[0][0]), int(range_list[0][1]) + 1):
+                        if i < 10:
+                            url = f"https://data.gharchive.org/{currentDate[0]}0{i}-"
+                        else:
+                            url = f"https://data.gharchive.org/{currentDate[0]}{i}-"
+                        url += f"{j}.json.gz"
+
+                        if not check_archive_folder(pathArchive, pathCurrentArchive, url.split("/")[-1]):
+                            print("[+] Downloading...")
+                            if verbose:
+                                request = ["wget", url, "-P", pathCurrentArchive]
+                            else:
+                                request = ["wget", "-q", url, "-P", pathCurrentArchive]
+                            subprocessCall(request)
+                        else:
+                            print("[+] Archive already Download")
+            else:
+                print("[-] Date Value Error for Days or Hours")
+                exit(-1)
+    else:
+        loc = args.archiveName.split("-")
+        if (int(loc[1]) > 0 and int(loc[1]) < 13) and (int(loc[2]) > 0 and int(loc[2]) < 32) and (int(loc[3]) >= 0 and int(loc[3]) < 24):
+            url = f"https://data.gharchive.org/{args.archiveName}.json.gz"
+
+            if not check_archive_folder(pathArchive, pathCurrentArchive, url.split("/")[-1]):
+                print("[+] Downloading...")
+                if verbose:
+                    request = ["wget", url, "-P", pathCurrentArchive]
+                else:
+                    request = ["wget", "-q", url, "-P", pathCurrentArchive]
+                subprocessCall(request)
+            else:
+                print("[+] Archive already Download")
+
+
+
     for archive in os.listdir(pathCurrentArchive):
-        fileSrc = os.path.join(pathCurrentArchive, archive)
-        fileDst = os.path.join(pathArchive, archive)
+        currentArchive = os.path.join(pathCurrentArchive, archive)
 
-        os.rename(fileSrc, fileDst)
+        ## Open json file
+        print("[+] Unzip...")
+        data = [json.loads(line) for line in gzip.open(currentArchive, 'r')]
+
+        print("[+] Process...")
+        ele_list = list()
+        for element in data:
+            if element["type"] == "PushEvent":
+                flag = False
+                if args.org or args.fileorg:
+                    if "org" in element:
+                        for orgs in list_org:
+                            if orgs.rstrip("\n") == element["org"]["login"]:
+                                flag = True
+                                break
+                if args.users or args.fileusers:
+                    for i in range(0, len(element["payload"]["commits"])):
+                        for users in list_users:
+                            if users.rstrip("\n") == element["payload"]["commits"][i]["author"]["name"]:
+                                flag = True
+                                break
+                        if flag:
+                            break
+
+                ## org or user match with entry
+                if flag or (not args.org and not args.users and not args.fileorg and not args.fileusers):
+                    ## If cache is active, check in redis db to see if this event have already process
+                    if not r.exists("event:{}".format(element["id"])) or args.nocache:
+                        if not args.nocache:
+                            r.set("event:{}".format(element["id"]), element["id"])
+                            r.expire("event:{}".format(element["id"]), cache_expire)
+                        ele_list.append(element)
+                    elif verbose:
+                        print(f"Already done for PushEvent {element['id']}")
+
+        print("[+] Rule Creation")
+        ## Rule creation
+        cpCommit = 0
+        cpPatch = 0
+        headerRemain = ""
+
+        if verbose:
+            print("\t[+] Check commit message if word or list are give in entry")
+
+        for element in ele_list:
+            date = datetime.datetime.strptime(element["created_at"], "%Y-%m-%dT%H:%M:%SZ").strftime("%Y-%m-%d")
+            time_element = datetime.datetime.strptime(element["created_at"], "%Y-%m-%dT%H:%M:%SZ").strftime("%H:%M:%S")
+
+            uuid_parent = str(uuid4())
+
+            ## Check each commit message for remaining elements
+            for i in range(0,len(element["payload"]["commits"])):
+                if args.fileword:
+                    for lines in list_words:
+                        if lines.rstrip("\n") in element["payload"]["commits"][i]["message"]:
+                            cpPatch, cpCommit, headerRemain = json_process(element, i, date, time_element, cpPatch, cpCommit)
+                ## If all pass words are in the commit message then do the process
+                ## and condition apply with all word give in entry
+                elif args.words:
+                    flagListWord = True
+                    for lines in list_words:
+                        if not lines.rstrip("\n") in element["payload"]["commits"][i]["message"]:
+                            flagListWord = False
+                            break
+                    if flagListWord:
+                        cpPatch, cpCommit, headerRemain = json_process(element, i, date, time_element, cpPatch, cpCommit)
+                else:
+                    cpPatch, cpCommit, headerRemain = json_process(element, i, date, time_element, cpPatch, cpCommit)
+                
+            print(f"\r\t[+] Commit JSON files: {cpCommit}, Patch JSON files: {cpPatch}, API call remaining: {headerRemain}", end="")
+    print()
+
+    if args.nocache:
+        shutil.rmtree(pathArchive)
+    else:
+        for archive in os.listdir(pathCurrentArchive):
+            fileSrc = os.path.join(pathCurrentArchive, archive)
+            fileDst = os.path.join(pathArchive, archive)
+
+            os.rename(fileSrc, fileDst)
