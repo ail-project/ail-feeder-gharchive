@@ -10,7 +10,7 @@ This AIL feeder is a generic software to extract informations from [GHArchive](h
 dacru@dacru:~/git/ail-feeder-gharchive/bin$ python3 gharchive_feeder.py --help  
 usage: gharchive_feeder.py [-h] [-d] [-v] -a ARCHIVENAME [--nocache] [-u USERS [USERS ...]] 
 						   [-fu FILEUSERS] [-o ORG [ORG ...]] [-fo FILEORG] 
-						   [-w WORDS [WORDS ...]] [-fw FILEWORD]
+						   [-w WORDS [WORDS ...]] [-c] [-fw FILEWORD]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -28,7 +28,8 @@ optional arguments:
   -fo FILEORG, --fileorg FILEORG
                         file containing list of organisations
   -w WORDS [WORDS ...], --words WORDS [WORDS ...]
-                        list of words to search. If no words is give, all commit message will be add
+                        list of words to search. '-w update bot' will search both words with an AND. '-w "update bot"' will search for the string
+  -c, --case            active case for --words option
   -fw FILEWORD, --fileword FILEWORD
                         file containing list of words for commit message
 
@@ -56,7 +57,15 @@ dacru@dacru:~/git/ail-feeder-gharchive/bin$ python3 gharchive_feeder.py -a 2021-
 
 
 
-3. Download the archive for: 15 pm, 2 October 2021. Search for "password"  and for "removed" in commit message for the org CIRCL
+3. Download the archive for: 15 pm, 2 October 2021. Search for "password removed" in commit message
+
+~~~
+dacru@dacru:~/git/ail-feeder-gharchive/bin$ python3 gharchive_feeder.py -a 2021-10-01-2 -w "password removed"
+~~~
+
+
+
+4. Download the archive for: 15 pm, 2 October 2021. Search for "password"  and for "removed" in commit message for the org CIRCL
 
 ~~~
 dacru@dacru:~/git/ail-feeder-gharchive/bin$ python3 gharchive_feeder.py -a 2021-10-01-2 -w password removed -o CIRCL
@@ -64,7 +73,7 @@ dacru@dacru:~/git/ail-feeder-gharchive/bin$ python3 gharchive_feeder.py -a 2021-
 
 
 
-4. Download the archive for: 15 pm, 2 October 2021. Search for "password"  and for "removed" in commit message for the user DavidCruciani
+5. Download the archive for: 15 pm, 2 October 2021. Search for "password"  and for "removed" in commit message for the user DavidCruciani
 
 ~~~
 dacru@dacru:~/git/ail-feeder-gharchive/bin$ python3 gharchive_feeder.py -a 2021-10-01-2 -w password removed -u DavidCruciani

@@ -23,8 +23,15 @@ from pyail import PyAIL
 pathProg = pathlib.Path(__file__).parent.absolute()
 
 ## Config
-config = configparser.ConfigParser()
-config.read('../etc/ail-feeder-gharchive.cfg')
+pathConf = '../etc/ail-feeder-gharchive.cfg'
+
+if os.path.isfile(pathConf):
+    config = configparser.ConfigParser()
+    config.read(pathConf)
+else:
+    print("[-] No conf file found")
+    exit(-1)
+
 
 if 'general' in config:
     uuid = config['general']['uuid']
@@ -317,8 +324,10 @@ if __name__ == '__main__':
     parser.add_argument("-o", "--org", nargs="+", help="search organisation")
     parser.add_argument("-fo", "--fileorg", help="file containing list of organisations")
 
-    parser.add_argument("-w", "--words", nargs="+", help="list of words to search. If no words is give, all commit message will be add")
+    parser.add_argument("-w", "--words", nargs="+", help="list of words to search. '-w update bot' will search both words with an AND. '-w \"update bot\"' will search for the string")
+    parser.add_argument("-c", "--case", help="active case for --words option", action="store_true")
     parser.add_argument("-fw", "--fileword", help="file containing list of words for commit message")
+    
     args = parser.parse_args()
 
     debug = args.d
@@ -534,9 +543,14 @@ if __name__ == '__main__':
                 elif args.words:
                     flagListWord = True
                     for lines in list_words:
-                        if not lines.rstrip("\n") in element["payload"]["commits"][i]["message"]:
-                            flagListWord = False
-                            break
+                        if args.case:
+                            if not re.search(lines, element["payload"]["commits"][i]["message"]):
+                                flagListWord = False
+                                break
+                        else:
+                            if not re.search(lines, element["payload"]["commits"][i]["message"], flags=re.IGNORECASE):
+                                flagListWord = False
+                                break
                     if flagListWord:
                         cpPatch, cpCommit, headerRemain = json_process(element, i, date, time_element, cpPatch, cpCommit)
                 else:
