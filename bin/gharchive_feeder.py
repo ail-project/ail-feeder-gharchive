@@ -17,6 +17,8 @@ import datetime
 import requests
 import subprocess
 import configparser
+import git_vuln
+
 from uuid import uuid4
 from pyail import PyAIL
 
@@ -326,7 +328,9 @@ if __name__ == '__main__':
 
     parser.add_argument("-w", "--words", nargs="+", help="list of words to search. '-w update bot' will search both words with an AND. '-w \"update bot\"' will search for the string")
     parser.add_argument("-c", "--case", help="active case for --words option", action="store_true")
-    parser.add_argument("-fw", "--fileword", help="file containing list of words for commit message")
+    parser.add_argument("-fw", "--fileword", help="file containing list of words for commit message", action="store_true")
+
+    parser.add_argument("--git_vuln_finder", help="apply patterns on commit message to find vulnerability. This option pass over all other one.", action="store_true")
     
     args = parser.parse_args()
 
@@ -486,42 +490,51 @@ if __name__ == '__main__':
         print("[+] Unzip...")
         data = [json.loads(line) for line in gzip.open(currentArchive, 'r')]
 
-        print("[+] Process...")
-        ele_list = list()
-        for element in data:
-            if element["type"] == "PushEvent":
-                flag = False
-                if args.org or args.fileorg:
-                    if "org" in element:
-                        for orgs in list_org:
-                            if orgs.rstrip("\n") == element["org"]["login"]:
-                                flag = True
+        if not args.git_vuln_finder:
+            print("[+] Process...")
+            ele_list = list()
+            for element in data:
+                if element["type"] == "PushEvent":
+                    flag = False
+                    if args.org or args.fileorg:
+                        if "org" in element:
+                            for orgs in list_org:
+                                if orgs.rstrip("\n") == element["org"]["login"]:
+                                    flag = True
+                                    break
+                    if args.users or args.fileusers:
+                        for i in range(0, len(element["payload"]["commits"])):
+                            for users in list_users:
+                                if users.rstrip("\n") == element["payload"]["commits"][i]["author"]["name"]:
+                                    flag = True
+                                    break
+                            if flag:
                                 break
-                if args.users or args.fileusers:
-                    for i in range(0, len(element["payload"]["commits"])):
-                        for users in list_users:
-                            if users.rstrip("\n") == element["payload"]["commits"][i]["author"]["name"]:
-                                flag = True
-                                break
-                        if flag:
-                            break
 
-                ## org or user match with entry
-                if flag or (not args.org and not args.users and not args.fileorg and not args.fileusers):
-                    ## If cache is active, check in redis db to see if this event have already process
-                    if not r.exists("event:{}".format(element["id"])) or args.nocache:
-                        if not args.nocache:
-                            r.set("event:{}".format(element["id"]), element["id"])
-                            r.expire("event:{}".format(element["id"]), cache_expire)
-                        ele_list.append(element)
-                    elif verbose:
-                        print(f"Already done for PushEvent {element['id']}")
+                    ## org or user match with entry
+                    if flag or (not args.org and not args.users and not args.fileorg and not args.fileusers):
+                        ## If cache is active, check in redis db to see if this event have already process
+                        if not r.exists("event:{}".format(element["id"])) or args.nocache:
+                            if not args.nocache:
+                                r.set("event:{}".format(element["id"]), element["id"])
+                                r.expire("event:{}".format(element["id"]), cache_expire)
+                            ele_list.append(element)
+                        elif verbose:
+                            print(f"Already done for PushEvent {element['id']}")
+        else:
+            ele_list = list()
+            for element in data:
+                if element["type"] == "PushEvent":
+                    ele_list.append(element)
 
         print("[+] Rule Creation")
         ## Rule creation
         cpCommit = 0
         cpPatch = 0
         headerRemain = ""
+        cpVuln = 0
+
+        pathVuln = os.path.join(head, "vuln.json")
 
         if verbose:
             print("\t[+] Check commit message if word or list are give in entry")
@@ -534,29 +547,39 @@ if __name__ == '__main__':
 
             ## Check each commit message for remaining elements
             for i in range(0,len(element["payload"]["commits"])):
-                if args.fileword:
-                    for lines in list_words:
-                        if lines.rstrip("\n") in element["payload"]["commits"][i]["message"]:
+                if not args.git_vuln_finder:
+                    if args.fileword:
+                        for lines in list_words:
+                            if lines.rstrip("\n") in element["payload"]["commits"][i]["message"]:
+                                cpPatch, cpCommit, headerRemain = json_process(element, i, date, time_element, cpPatch, cpCommit)
+                    ## If all pass words are in the commit message then do the process
+                    ## and condition apply with all word give in entry
+                    elif args.words:
+                        flagListWord = True
+                        for lines in list_words:
+                            if args.case:
+                                if not re.search(lines, element["payload"]["commits"][i]["message"]):
+                                    flagListWord = False
+                                    break
+                            else:
+                                if not re.search(lines, element["payload"]["commits"][i]["message"], flags=re.IGNORECASE):
+                                    flagListWord = False
+                                    break
+                        if flagListWord:
                             cpPatch, cpCommit, headerRemain = json_process(element, i, date, time_element, cpPatch, cpCommit)
-                ## If all pass words are in the commit message then do the process
-                ## and condition apply with all word give in entry
-                elif args.words:
-                    flagListWord = True
-                    for lines in list_words:
-                        if args.case:
-                            if not re.search(lines, element["payload"]["commits"][i]["message"]):
-                                flagListWord = False
-                                break
-                        else:
-                            if not re.search(lines, element["payload"]["commits"][i]["message"], flags=re.IGNORECASE):
-                                flagListWord = False
-                                break
-                    if flagListWord:
+                    else:
                         cpPatch, cpCommit, headerRemain = json_process(element, i, date, time_element, cpPatch, cpCommit)
                 else:
-                    cpPatch, cpCommit, headerRemain = json_process(element, i, date, time_element, cpPatch, cpCommit)
-                
-            print(f"\r\t[+] Commit JSON files: {cpCommit}, Patch JSON files: {cpPatch}, API call remaining: {headerRemain}", end="")
+                    all_potential_vulnerabilities, all_cve_found, found = git_vuln.find(element["payload"]["commits"][i], element)
+                    for vuln in all_potential_vulnerabilities:
+                        cpVuln += 1
+                        with open(pathVuln, "a") as write_debug:
+                            json.dump(all_potential_vulnerabilities[vuln], write_debug, indent=4)
+
+            if not args.git_vuln_finder:
+                print(f"\r\t[+] Commit JSON files: {cpCommit}, Patch JSON files: {cpPatch}, API call remaining: {headerRemain}", end="")
+            else:
+                print(f"\r\t[+] Git vuln find: {cpVuln}", end="")
     print()
 
     if args.nocache:
