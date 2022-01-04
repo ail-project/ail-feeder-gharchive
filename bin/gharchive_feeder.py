@@ -17,7 +17,7 @@ import datetime
 import requests
 import subprocess
 import configparser
-import git_vuln
+from git_vuln_finder import find_event
 
 from uuid import uuid4
 from pyail import PyAIL
@@ -330,7 +330,7 @@ if __name__ == '__main__':
     parser.add_argument("-c", "--case", help="active case for --words option", action="store_true")
     parser.add_argument("-fw", "--fileword", help="file containing list of words for commit message", action="store_true")
 
-    parser.add_argument("--git_vuln_finder", help="apply patterns on commit message to find vulnerability. This option pass over all other one.", action="store_true")
+    parser.add_argument("--git_vuln_finder", help="Call git-vuln-finder module. Apply patterns on commit message to find vulnerability. This option pass over all other one.", action="store_true")
     
     args = parser.parse_args()
 
@@ -570,7 +570,7 @@ if __name__ == '__main__':
                     else:
                         cpPatch, cpCommit, headerRemain = json_process(element, i, date, time_element, cpPatch, cpCommit)
                 else:
-                    all_potential_vulnerabilities, all_cve_found, found = git_vuln.find(element["payload"]["commits"][i], element)
+                    all_potential_vulnerabilities, all_cve_found, found = find_event(element["payload"]["commits"][i], element)
                     for vuln in all_potential_vulnerabilities:
                         cpVuln += 1
                         with open(pathVuln, "a") as write_debug:

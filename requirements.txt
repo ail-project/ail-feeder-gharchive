@@ -1,2 +1,3 @@
 pyail
 redis
+git-vuln-finder

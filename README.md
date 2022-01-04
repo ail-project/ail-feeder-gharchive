@@ -32,6 +32,7 @@ optional arguments:
   -c, --case            active case for --words option
   -fw FILEWORD, --fileword FILEWORD
                         file containing list of words for commit message
+  --git_vuln_finder     Call git-vuln-finder module. Apply patterns on commit message to find vulnerability. This option pass over all other one.
 
 ~~~
 
@@ -81,6 +82,14 @@ dacru@dacru:~/git/ail-feeder-gharchive/bin$ python3 gharchive_feeder.py -a 2021-
 
 
 
+6. Download the archive for: 15 pm, 2 October 2021. Use special git-vuln-finder module
+
+~~~
+dacru@dacru:~/git/ail-feeder-gharchive/bin$ python3 gharchive_feeder.py -a 2021-10-01-2 --git-vuln-finder
+~~~
+
+
+
 
 
 # JSON output format to AIL
@@ -102,6 +111,7 @@ Using the AIL API, `data` will be compress in gzip format and encode with base64
 
 - [PyAIL](https://github.com/ail-project/PyAIL)
 - [redis](https://github.com/redis/redis-py)
+- [git-vuln-finder](https://github.com/cve-search/git-vuln-finder)
 
 
 
