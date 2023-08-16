@@ -188,7 +188,13 @@ Using the AIL API, `data` will be compress in gzip format and encode with base64
 ~~~
 
 
+## License
 
+
+This software is licensed under [GNU Affero General Public License version 3](http://www.gnu.org/licenses/agpl-3.0.html)
+
+Copyright (C) 2021-2023 CIRCL - Computer Incident Response Center Luxembourg
+Copyright (C) 2021-2023 David Cruciani
 
 
 
